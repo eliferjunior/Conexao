@@ -1,0 +1,14 @@
+{
+  "name": "konektra",
+  "version": "0.1.0",
+  "description": "Marketplace de profissionais liberais — conexões que pulsam.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node scripts/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

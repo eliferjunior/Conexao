@@ -1,0 +1,13 @@
+{
+  "name": "Konektra",
+  "short_name": "Konektra",
+  "description": "Conexões que pulsam. Profissionais liberais perto de você.",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#0a0e27",
+  "theme_color": "#0a0e27",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "assets/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

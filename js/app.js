@@ -1,5 +1,8 @@
 // Konektra — landing/nav glue. Page-specific logic lives in their own modules.
 import { currentUser, logout } from './auth.js';
+import { seedIfEmpty } from './seed.js';
+
+seedIfEmpty().catch(() => {});
 
 (async function initNav(){
   const user = await currentUser();
