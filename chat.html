@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#0a0e27" />
+<title>Mensagens — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links"></nav>
+</header>
+
+<main class="shell">
+  <div class="chat-grid">
+    <aside class="panel chat-side">
+      <h2>Conversas</h2>
+      <div id="threadList" class="list"></div>
+    </aside>
+    <section class="panel chat-main">
+      <div class="chat-head" id="chatHead">
+        <div class="muted">Selecione uma conversa ou abra um perfil para iniciar.</div>
+      </div>
+      <div class="chat-body" id="chatBody"></div>
+      <form id="chatForm" class="chat-form" hidden>
+        <textarea id="chatText" placeholder="Escreva sua mensagem (Enter envia, Shift+Enter quebra linha)" rows="2"></textarea>
+        <button class="btn btn-primary" type="submit">Enviar</button>
+      </form>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import { requireAuth } from './js/auth.js';
+import { db, findUser, findPro, threadIdFor, messagesIn, threadsFor, markThreadRead, notify } from './js/db.js';
+import { randomId } from './js/crypto.js';
+import { $, $$, h, initials, fmtTime, qs, toast } from './js/ui.js';
+
+const me = await requireAuth();
+
+let activeThread = null;
+let activeOther = null;
+let pollTimer = null;
+
+const explicitWith = qs('with');
+if (explicitWith && explicitWith !== me.id && findUser(explicitWith)){
+  openThread(explicitWith);
+}
+
+function renderThreadList(){
+  const box = $('#threadList'); box.innerHTML = '';
+  const ts = threadsFor(me.id);
+  if (!ts.length){ box.append(h('p', { class:'muted' }, 'Nenhuma conversa ainda. Abra o perfil de um profissional e clique em "Conversar".')); return; }
+  for (const last of ts){
+    const otherId = last.fromId === me.id ? last.toId : last.fromId;
+    const other = findUser(otherId); if (!other) continue;
+    const unread = db.get().messages.filter(m => m.threadId === last.threadId && m.toId === me.id && !m.readAt).length;
+    const card = h('button', {
+      class: 'item thread-item' + (activeThread === last.threadId ? ' active' : ''),
+      type: 'button',
+      onclick: () => openThread(otherId),
+    },
+      other.photo
+        ? h('img', { class:'avatar', src: other.photo, style:'width:42px;height:42px' })
+        : h('div', { class:'avatar avatar-placeholder', style:'width:42px;height:42px;font-size:14px' }, initials(other.name)),
+      h('div', { class:'meta' },
+        h('div', {}, h('b', {}, other.name), unread ? h('span', { class:'chip ok', style:'margin-left:8px' }, unread+' nova(s)') : null),
+        h('div', { class:'muted', style:'font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px' },
+          (last.fromId === me.id ? 'Você: ' : '') + last.text),
+        h('div', { class:'muted', style:'font-size:11px' }, fmtTime(last.createdAt)),
+      ),
+    );
+    box.append(card);
+  }
+}
+
+function openThread(otherId){
+  activeOther = findUser(otherId);
+  activeThread = threadIdFor(me.id, otherId);
+  const pro = findPro(otherId);
+  $('#chatHead').innerHTML = '';
+  $('#chatHead').append(
+    activeOther.photo
+      ? h('img', { class:'avatar', src: activeOther.photo, style:'width:40px;height:40px' })
+      : h('div', { class:'avatar avatar-placeholder', style:'width:40px;height:40px;font-size:13px' }, initials(activeOther.name)),
+    h('div', { style:'flex:1' },
+      h('div', { class:'pro-name' }, activeOther.name),
+      h('div', { class:'pro-sub' }, pro?.headline || (activeOther.role === 'client' ? 'Cliente' : 'Profissional')),
+    ),
+    h('a', { class:'btn', href:`profile.html?id=${activeOther.id}` }, 'Ver perfil'),
+  );
+  $('#chatForm').hidden = false;
+  markThreadRead(me.id, activeThread);
+  renderMessages();
+  renderThreadList();
+  $('#chatText').focus();
+}
+
+function renderMessages(){
+  const box = $('#chatBody'); box.innerHTML = '';
+  const msgs = messagesIn(activeThread);
+  if (!msgs.length){ box.append(h('p', { class:'muted', style:'text-align:center;padding:24px' }, 'Diga olá! Apresente-se e descreva o que precisa.')); return; }
+  let lastDay = '';
+  for (const m of msgs){
+    const day = new Date(m.createdAt).toLocaleDateString('pt-BR');
+    if (day !== lastDay){
+      box.append(h('div', { class:'chat-day' }, day));
+      lastDay = day;
+    }
+    const mine = m.fromId === me.id;
+    box.append(h('div', { class:'bubble ' + (mine ? 'mine' : 'theirs') },
+      h('div', { class:'bubble-text' }, m.text),
+      h('div', { class:'bubble-time' }, new Date(m.createdAt).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' })),
+    ));
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+$('#chatForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = $('#chatText').value.trim();
+  if (!text || !activeOther) return;
+  if (text.length > 2000){ toast('Mensagem muito longa.','err'); return; }
+  const msg = {
+    id: randomId('m'),
+    threadId: activeThread,
+    fromId: me.id, toId: activeOther.id,
+    text, createdAt: Date.now(), readAt: null,
+  };
+  db.save(d => d.messages.push(msg));
+  notify(activeOther.id, {
+    kind: 'message',
+    title: 'Nova mensagem de ' + me.name.split(' ')[0],
+    body: text.slice(0, 80),
+    href: `chat.html?with=${me.id}`,
+  });
+  $('#chatText').value = '';
+  renderMessages();
+  renderThreadList();
+});
+
+$('#chatText') && $('#chatText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); $('#chatForm').requestSubmit(); }
+});
+
+renderThreadList();
+pollTimer = setInterval(() => {
+  if (activeThread){
+    const before = messagesIn(activeThread).length;
+    renderMessages();
+    const after = messagesIn(activeThread).length;
+    if (after !== before) markThreadRead(me.id, activeThread);
+  }
+  renderThreadList();
+}, 2500);
+window.addEventListener('beforeunload', () => clearInterval(pollTimer));
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

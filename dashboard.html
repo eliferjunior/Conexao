@@ -19,8 +19,10 @@
       <a href="#perfil" class="active">Perfil</a>
       <a href="#profissional" id="link-pro">Profissional</a>
       <a href="#pedidos">Pedidos</a>
+      <a href="#favoritos">Favoritos</a>
       <a href="#avaliacoes">Avaliações</a>
       <a href="#dados">Meus dados & LGPD</a>
+      <a href="chat.html">💬 Mensagens</a>
     </aside>
     <section>
       <section id="perfil" class="panel">
@@ -118,6 +120,11 @@
         <div id="bookings" class="list"></div>
       </section>
 
+      <section id="favoritos" class="panel">
+        <h2>Favoritos</h2>
+        <div id="favorites" class="list"></div>
+      </section>
+
       <section id="avaliacoes" class="panel">
         <h2>Avaliações recebidas</h2>
         <div id="ratings" class="list"></div>
@@ -137,7 +144,7 @@
 
 <script type="module">
 import { requireAuth, SERVICE_CATEGORIES, logout } from './js/auth.js';
-import { db, findPro, avgRating } from './js/db.js';
+import { db, findPro, avgRating, notify, favoritesFor, toggleFavorite } from './js/db.js';
 import { getCurrentLocation } from './js/geo.js';
 import { sha256 } from './js/crypto.js';
 import { $, $$, h, stars, initials, fmtMoney, fmtTime, toast, fileToDataURL } from './js/ui.js';
@@ -160,6 +167,35 @@ function render(){
   if (showPro) renderPro();
   renderBookings();
   renderRatings();
+  renderFavorites();
+}
+
+function renderFavorites(){
+  const box = $('#favorites'); box.innerHTML = '';
+  const favs = favoritesFor(user.id);
+  if (!favs.length){ box.append(h('p', { class:'muted' }, 'Você ainda não marcou nenhum profissional como favorito. Explore a busca e clique em ☆ Favoritar.')); return; }
+  const d = db.get();
+  for (const f of favs){
+    const u = d.users.find(x => x.id === f.proId); if (!u) continue;
+    const pro = findPro(u.id);
+    const r = avgRating(u.id);
+    box.append(h('div', { class:'item' },
+      u.photo
+        ? h('img', { class:'avatar', src: u.photo, style:'width:46px;height:46px' })
+        : h('div', { class:'avatar avatar-placeholder', style:'width:46px;height:46px;font-size:14px' }, initials(u.name)),
+      h('div', { class:'meta' },
+        h('div', {}, h('b', {}, u.name), ' — ', h('span', { class:'muted' }, pro?.headline || 'Profissional')),
+        h('div', { class:'muted', style:'font-size:13px' },
+          (r.count ? stars(r.avg)+' '+r.avg+' ('+r.count+')' : 'Sem avaliações') +
+          (pro?.hourly ? ' • ' + fmtMoney(pro.hourly) + '/h' : '')),
+      ),
+      h('div', { class:'actions' },
+        h('a', { class:'btn btn-ghost', href:`chat.html?with=${u.id}` }, '💬'),
+        h('a', { class:'btn btn-primary', href:`profile.html?id=${u.id}` }, 'Ver perfil'),
+        h('button', { class:'btn', type:'button', onclick:()=>{ toggleFavorite(user.id, u.id); renderFavorites(); toast('Removido dos favoritos.'); } }, 'Remover'),
+      ),
+    ));
+  }
 }
 
 function renderPro(){
@@ -251,6 +287,7 @@ function renderBookings(tab='all'){
     const other = d.users.find(u => u.id === (b.clientId === user.id ? b.proId : b.clientId));
     const role = b.clientId === user.id ? 'Contratado' : 'Cliente';
     const actions = [];
+    if (other) actions.push(h('a', { class:'btn btn-ghost', href:`chat.html?with=${other.id}` }, '💬'));
     if (b.status === 'requested' && b.proId === user.id){
       actions.push(h('button', { class:'btn btn-ok', onclick:()=>updateBooking(b.id,'accepted') }, 'Aceitar'));
       actions.push(h('button', { class:'btn btn-danger', onclick:()=>updateBooking(b.id,'cancelled') }, 'Recusar'));
@@ -274,7 +311,23 @@ function renderBookings(tab='all'){
   }
 }
 function updateBooking(id, status){
-  db.save(d => { const b = d.bookings.find(x => x.id === id); if (b){ b.status = status; if (status==='done') b.doneAt = Date.now(); }});
+  let target = null;
+  db.save(d => {
+    const b = d.bookings.find(x => x.id === id);
+    if (!b) return;
+    b.status = status;
+    if (status === 'done') b.doneAt = Date.now();
+    target = b.clientId === user.id ? b.proId : b.clientId;
+  });
+  if (target){
+    const labels = { accepted:'aceito', cancelled:'cancelado', done:'concluído' };
+    notify(target, {
+      kind: 'booking',
+      title: 'Pedido ' + (labels[status] || status),
+      body: user.name.split(' ')[0] + ' atualizou um pedido.',
+      href: 'dashboard.html#pedidos',
+    });
+  }
   toast('Pedido atualizado.'); renderBookings(currentTab);
 }
 let currentTab = 'all';

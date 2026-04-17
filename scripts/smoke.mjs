@@ -128,5 +128,46 @@ await t('avgRating', () => {
   assert.equal(r.count, 2); assert.equal(r.avg, 4);
 });
 
+await t('threadIdFor is symmetric and stable', () => {
+  assert.equal(dbMod.threadIdFor('a','b'), dbMod.threadIdFor('b','a'));
+  assert.notEqual(dbMod.threadIdFor('a','b'), dbMod.threadIdFor('a','c'));
+});
+
+await t('messages: send, list, unread count, mark read', () => {
+  localStorage.clear();
+  const tid = dbMod.threadIdFor('u1','u2');
+  dbMod.db.save(d => {
+    d.messages.push({ id:'m1', threadId:tid, fromId:'u1', toId:'u2', text:'oi', createdAt:1, readAt:null });
+    d.messages.push({ id:'m2', threadId:tid, fromId:'u2', toId:'u1', text:'oi de volta', createdAt:2, readAt:null });
+    d.messages.push({ id:'m3', threadId:tid, fromId:'u1', toId:'u2', text:'tudo bem?', createdAt:3, readAt:null });
+  });
+  assert.equal(dbMod.messagesIn(tid).length, 3);
+  assert.equal(dbMod.unreadMessagesCount('u2'), 2);
+  assert.equal(dbMod.unreadMessagesCount('u1'), 1);
+  dbMod.markThreadRead('u2', tid);
+  assert.equal(dbMod.unreadMessagesCount('u2'), 0);
+  assert.equal(dbMod.threadsFor('u1').length, 1);
+});
+
+await t('favorites: toggle and isFavorite', () => {
+  localStorage.clear();
+  assert.equal(dbMod.isFavorite('u1','p1'), false);
+  assert.equal(dbMod.toggleFavorite('u1','p1'), true);
+  assert.equal(dbMod.isFavorite('u1','p1'), true);
+  assert.equal(dbMod.favoritesFor('u1').length, 1);
+  assert.equal(dbMod.toggleFavorite('u1','p1'), false);
+  assert.equal(dbMod.isFavorite('u1','p1'), false);
+});
+
+await t('notifications: notify, unread count, markRead', () => {
+  localStorage.clear();
+  dbMod.notify('u1', { kind:'message', title:'Olá', body:'corpo', href:'chat.html' });
+  dbMod.notify('u1', { kind:'booking', title:'Pedido' });
+  assert.equal(dbMod.unreadNotificationsCount('u1'), 2);
+  assert.equal(dbMod.notificationsFor('u1').length, 2);
+  dbMod.markNotificationsRead('u1');
+  assert.equal(dbMod.unreadNotificationsCount('u1'), 0);
+});
+
 console.log(`\n${ok} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

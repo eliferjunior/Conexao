@@ -31,7 +31,15 @@ const srv = http.createServer((req, res) => {
     const full = path.normalize(path.join(ROOT, pth));
     if (!full.startsWith(ROOT)){ res.writeHead(403); res.end('forbidden'); return; }
     fs.stat(full, (err, st) => {
-      if (err || !st.isFile()){ res.writeHead(404, SECURITY_HEADERS); res.end('not found'); return; }
+      if (err || !st.isFile()){
+        const fallback = path.join(ROOT, '404.html');
+        fs.stat(fallback, (e2, s2) => {
+          if (e2 || !s2.isFile()){ res.writeHead(404, SECURITY_HEADERS); res.end('not found'); return; }
+          res.writeHead(404, { 'Content-Type':'text/html; charset=utf-8', ...SECURITY_HEADERS });
+          fs.createReadStream(fallback).pipe(res);
+        });
+        return;
+      }
       const ext = path.extname(full).toLowerCase();
       res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream', ...SECURITY_HEADERS });
       fs.createReadStream(full).pipe(res);

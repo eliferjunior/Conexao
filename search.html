@@ -53,7 +53,7 @@
 
 <script type="module">
 import { currentUser, SERVICE_CATEGORIES } from './js/auth.js';
-import { db, avgRating } from './js/db.js';
+import { db, avgRating, isFavorite, toggleFavorite } from './js/db.js';
 import { getCurrentLocation, haversineKm } from './js/geo.js';
 import { $, $$, h, stars, initials, fmtMoney, toast } from './js/ui.js';
 
@@ -128,7 +128,20 @@ function card({ user, pro, rating, dist }){
     h('div', { class:'row-wrap' }, ...services.map(s => h('span', { class:'chip' }, s.emoji+' '+s.label))),
     h('div', { class:'row-wrap', style:'justify-content:space-between;align-items:center' },
       h('div', { class:'pro-price' }, pro.hourly ? fmtMoney(pro.hourly) + '/h' : 'A combinar'),
-      h('a', { class:'btn btn-primary', href:`profile.html?id=${user.id}` }, 'Ver perfil')
+      h('div', { class:'row-wrap' },
+        me ? h('button', {
+          class:'btn btn-ghost',
+          type:'button',
+          title:'Favoritar',
+          onclick:(ev) => {
+            ev.preventDefault();
+            const on = toggleFavorite(me.id, user.id);
+            ev.target.textContent = on ? '★' : '☆';
+            toast(on ? 'Adicionado aos favoritos.' : 'Removido dos favoritos.');
+          },
+        }, isFavorite(me.id, user.id) ? '★' : '☆') : null,
+        h('a', { class:'btn btn-primary', href:`profile.html?id=${user.id}` }, 'Ver perfil'),
+      )
     )
   );
 }

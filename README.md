@@ -37,20 +37,30 @@ O atalho abre `http://localhost:8080/` automaticamente no seu navegador e usa No
 index.html           landing
 register.html        cadastro (cliente / profissional / ambos)
 login.html           acesso
-dashboard.html       painel do usuário
-search.html          busca de profissionais
+dashboard.html       painel: perfil, profissional, pedidos, favoritos, LGPD
+search.html          busca de profissionais (com favoritar)
 urgent.html          chamada urgente (SOS, estilo Uber)
-profile.html         perfil público + contratação + avaliação
+profile.html         perfil público + contratação + chat + favoritar + avaliação
+chat.html            mensagens 1:1 (lista de conversas + bolhas)
 subscription.html    planos Free / Plus / Infinity
-tests.html           suite de testes automatizados
+faq.html             perguntas frequentes
+404.html             página de erro elegante
+tests.html           suite de testes automatizados (browser)
 
 css/styles.css       tema futurista (neon cyan/magenta em fundo espaço profundo)
 js/crypto.js         PBKDF2, HMAC, SHA-256, CSPRNG
-js/db.js             "banco" em localStorage
+js/db.js             "banco" em localStorage (users, pros, bookings, ratings,
+                     urgentCalls, messages, favorites, notifications, events)
 js/auth.js           cadastro, login, sessão, validação de CPF/senha
 js/geo.js            geolocalização, matching do modo urgente
 js/ui.js             helpers de UI
-js/app.js            navegação global
+js/seed.js           dados de demonstração na primeira visita
+js/app.js            navegação global, sino de notificações, registro do SW
+
+sw.js                service worker (cache do shell, fallback offline para 404)
+manifest.webmanifest manifest PWA
+scripts/serve.mjs    servidor estático zero-dep com headers de segurança
+scripts/smoke.mjs    smoke tests em Node (npm test)
 
 docs/TERMS.html      Termos de Uso
 docs/PRIVACY.html    Política de Privacidade (LGPD)

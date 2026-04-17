@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="theme-color" content="#0a0e27" />
+<title>Perguntas frequentes — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links">
+    <a href="search.html">Buscar</a>
+    <a href="urgent.html">Urgente</a>
+    <a href="subscription.html">Planos</a>
+    <a href="login.html">Entrar</a>
+    <a href="register.html" class="btn btn-primary">Criar conta</a>
+  </nav>
+</header>
+
+<main class="shell">
+  <section class="panel">
+    <h2 style="text-align:center">Perguntas frequentes</h2>
+    <p class="muted" style="text-align:center">Tudo o que você precisa para começar a usar a Konektra.</p>
+  </section>
+
+  <div class="faq-list">
+    <details class="faq-item" open>
+      <summary>O que é a Konektra?</summary>
+      <div class="ans">É um marketplace que conecta profissionais liberais (dentistas, eletricistas, professores, pet sitters, personal trainers etc.) a clientes na sua região, com avaliações reais, preço por hora e modo urgente em tempo real.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>O cliente paga para usar o app?</summary>
+      <div class="ans">Não. Para clientes a Konektra é 100% gratuita. Nossa receita vem das assinaturas dos profissionais (Free, Plus e Infinity).</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Como funciona o modo urgente?</summary>
+      <div class="ans">Você aciona o SOS, escolhe a categoria do serviço, o raio em km e descreve a necessidade. Profissionais disponíveis dentro do raio recebem o pedido em tempo real. O primeiro a aceitar fecha o match.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Como meus dados são protegidos?</summary>
+      <div class="ans">Senhas usam PBKDF2-SHA256 com 120.000 iterações e salt único. A sessão é assinada com HMAC-SHA256. Documentos são representados por hash SHA-256 — o arquivo não trafega. Veja mais em <a href="docs/SECURITY.html">Segurança</a> e <a href="docs/PRIVACY.html">LGPD</a>.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Posso excluir minha conta e meus dados?</summary>
+      <div class="ans">Sim. No painel, em "Meus dados &amp; LGPD", você pode exportar tudo em JSON e excluir a conta a qualquer momento, conforme o Art. 18 da LGPD.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Como avalio um profissional?</summary>
+      <div class="ans">Após o serviço ser marcado como "concluído" no seu painel, abra o perfil do profissional e atribua de 1 a 5 estrelas, com comentário opcional. As avaliações são públicas e portáteis.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Os documentos enviados são públicos?</summary>
+      <div class="ans">Não. Documentos são usados apenas para verificação. Nesta demo, somente o hash do arquivo é guardado localmente — o arquivo nunca sai do seu dispositivo.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Quais as diferenças entre os planos?</summary>
+      <div class="ans">Free dá 5 chamadas urgentes por mês. Plus (R$ 39,90) sobe para 50 chamadas, +12% de boost no ranking e selo. Infinity (R$ 89,90) tem chamadas ilimitadas e +25% de boost. Veja em <a href="subscription.html">Planos</a>.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Como conversar com um profissional?</summary>
+      <div class="ans">Abra o perfil dele e clique em "Conversar". Você também pode acessar todas as conversas em <a href="chat.html">Mensagens</a>. O profissional recebe uma notificação no sino do topo.</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Funciona em modo offline?</summary>
+      <div class="ans">A casca do app fica em cache via Service Worker, então a interface abre mesmo sem internet. Funções que dependem do "banco" continuam usando seu próprio dispositivo (localStorage).</div>
+    </details>
+
+    <details class="faq-item">
+      <summary>Preciso instalar algo para rodar localmente?</summary>
+      <div class="ans">Basta executar <code>./start.sh</code> (Linux/Mac), <code>start.bat</code> (Windows) ou <code>npm start</code>. O atalho usa Node, Python ou PHP — o que estiver instalado — e abre <code>http://localhost:8080</code>.</div>
+    </details>
+  </div>
+</main>
+
+<footer class="foot">
+  <div class="foot-inner">
+    <div>
+      <a href="index.html" class="brand">
+        <img src="assets/logo.svg" alt="" width="28" height="28" />
+        <span class="brand-name">Konektra</span>
+      </a>
+      <p class="muted">© 2026 Konektra. Conexões que pulsam.</p>
+    </div>
+    <nav class="foot-links">
+      <a href="docs/TERMS.html">Termos de uso</a>
+      <a href="docs/PRIVACY.html">Privacidade</a>
+      <a href="docs/SECURITY.html">Segurança</a>
+      <a href="faq.html">FAQ</a>
+      <a href="tests.html">Testes</a>
+    </nav>
+  </div>
+</footer>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -49,7 +49,7 @@
 
 <script type="module">
 import { currentUser, SERVICE_CATEGORIES } from './js/auth.js';
-import { db, findUser, findPro, avgRating } from './js/db.js';
+import { db, findUser, findPro, avgRating, isFavorite, toggleFavorite, notify } from './js/db.js';
 import { randomId } from './js/crypto.js';
 import { $, $$, h, stars, initials, fmtMoney, fmtTime, qs, toast } from './js/ui.js';
 
@@ -67,15 +67,30 @@ function render(){
   const plan = pro?.plan === 'infinity' ? h('span', { class:'badge infinity' }, '∞ INFINITY')
     : pro?.plan === 'plus' ? h('span', { class:'badge plus' }, '✦ PLUS') : null;
   const verified = pro?.verified ? h('span', { class:'badge verified' }, '✓ Verificado') : null;
+  const canInteract = me && me.id !== target.id;
+  const fav = canInteract && pro ? isFavorite(me.id, target.id) : false;
+  const actions = canInteract ? h('div', { class:'row-wrap', style:'margin-left:auto' },
+    h('a', { class:'btn btn-ghost', href:`chat.html?with=${target.id}` }, '💬 Conversar'),
+    pro ? h('button', {
+      class:'btn ' + (fav ? 'btn-ok' : ''),
+      type:'button',
+      onclick: () => {
+        const on = toggleFavorite(me.id, target.id);
+        toast(on ? 'Adicionado aos favoritos.' : 'Removido dos favoritos.');
+        render();
+      },
+    }, fav ? '★ Favorito' : '☆ Favoritar') : null,
+  ) : null;
   const content = [
-    h('div', { class:'pro-head', style:'gap:16px' }, avatar,
-      h('div', {}, h('h2', { style:'margin:0' }, target.name),
+    h('div', { class:'pro-head', style:'gap:16px;flex-wrap:wrap' }, avatar,
+      h('div', { style:'flex:1;min-width:200px' }, h('h2', { style:'margin:0' }, target.name),
         h('div', { class:'pro-sub' }, pro?.headline || (target.role === 'client' ? 'Cliente' : 'Profissional')),
         h('div', { class:'row-wrap', style:'margin-top:6px' },
           r.count ? h('span', { class:'chip star' }, stars(r.avg)+' '+r.avg+' ('+r.count+')') : h('span', { class:'chip' }, 'Sem avaliações'),
           verified, plan,
           pro?.available ? h('span', { class:'chip ok' }, 'Disponível agora') : null,
-        ))),
+        )),
+      actions),
     pro ? h('div', {},
       h('h3', {}, 'Sobre'),
       h('p', { class:'muted' }, pro.bio || '—'),
@@ -107,6 +122,12 @@ if (me && me.id !== target.id && pro){
     const cat = $('#hireCat').value; if (!cat){ toast('Profissional sem serviços cadastrados.','err'); return; }
     const id = randomId('bk');
     db.save(d => d.bookings.push({ id, clientId:me.id, proId:target.id, serviceCat:cat, status:'requested', price:pro.hourly||0, createdAt:Date.now(), urgent:false, note:$('#hireNote').value.trim() }));
+    notify(target.id, {
+      kind:'booking',
+      title:'Novo pedido de ' + me.name.split(' ')[0],
+      body: SERVICE_CATEGORIES.find(c => c.id===cat)?.label || cat,
+      href: 'dashboard.html#pedidos',
+    });
     toast('Pedido enviado!', 'ok');
     setTimeout(()=> location.href='dashboard.html#pedidos', 400);
   });
