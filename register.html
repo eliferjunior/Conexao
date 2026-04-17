@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Criar conta — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links">
+    <a href="login.html">Entrar</a>
+  </nav>
+</header>
+<main class="shell">
+  <div class="auth-wrap">
+    <h1>Criar conta</h1>
+    <p class="sub">Leva menos de 1 minuto. Você pode ser cliente, profissional ou os dois.</p>
+    <form id="regForm" class="form" autocomplete="off" novalidate>
+      <div class="segmented" role="tablist" aria-label="Tipo de conta">
+        <button type="button" data-role="client" class="active">Sou cliente</button>
+        <button type="button" data-role="pro">Sou profissional</button>
+        <button type="button" data-role="both">Os dois</button>
+      </div>
+      <label>Nome completo
+        <input id="name" required placeholder="Ex.: Maria Silva" />
+      </label>
+      <div class="row">
+        <label>E-mail
+          <input id="email" type="email" required placeholder="voce@exemplo.com" />
+        </label>
+        <label>Telefone
+          <input id="phone" required placeholder="(11) 90000-0000" />
+        </label>
+      </div>
+      <label>CPF
+        <input id="cpf" required placeholder="000.000.000-00" />
+        <span class="hint">Validamos o CPF matematicamente; o número é armazenado apenas no seu dispositivo nesta demo.</span>
+      </label>
+      <label>Senha
+        <input id="password" type="password" required minlength="8" placeholder="Mínimo 8 caracteres, com números e símbolo" />
+        <span class="hint" id="pwHint">Força: —</span>
+      </label>
+      <label class="switch"><input type="checkbox" id="terms" /> Li e aceito os <a href="docs/TERMS.html" target="_blank">Termos de Uso</a>.</label>
+      <label class="switch"><input type="checkbox" id="privacy" /> Li e aceito a <a href="docs/PRIVACY.html" target="_blank">Política de Privacidade</a> (LGPD).</label>
+      <div id="formError" class="error" hidden></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">Criar minha conta</button>
+      <p class="hint">Já tem conta? <a href="login.html">Entrar</a></p>
+    </form>
+  </div>
+</main>
+<script type="module">
+import { register, passwordStrength, validateEmail, validateCPF } from './js/auth.js';
+import { $, $$, qs, toast } from './js/ui.js';
+
+let role = qs('role') || 'client';
+const segBtns = $$('.segmented [data-role]');
+function setRole(r){
+  role = r;
+  segBtns.forEach(b => b.classList.toggle('active', b.dataset.role === r));
+}
+setRole(role);
+segBtns.forEach(b => b.addEventListener('click', () => setRole(b.dataset.role)));
+
+function fmtCPF(v){
+  const s = v.replace(/\D/g,'').slice(0,11);
+  return s.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})\.(\d{3})(\d)/,'$1.$2.$3').replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/,'$1.$2.$3-$4');
+}
+$('#cpf').addEventListener('input', e => e.target.value = fmtCPF(e.target.value));
+$('#phone').addEventListener('input', e => {
+  const s = e.target.value.replace(/\D/g,'').slice(0,11);
+  e.target.value = s.replace(/(\d{2})(\d)/,'($1) $2').replace(/(\d{5})(\d)/,'$1-$2');
+});
+$('#password').addEventListener('input', e => {
+  const s = passwordStrength(e.target.value);
+  const labels = ['muito fraca','fraca','média','boa','forte','excelente'];
+  const colors = ['#ff5c7a','#ff5c7a','#ffd166','#4cc9f0','#3ddc97','#00f5d4'];
+  $('#pwHint').innerHTML = `Força: <b style="color:${colors[s]}">${labels[s]}</b>`;
+});
+
+$('#regForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('#formError'); err.hidden = true;
+  const payload = {
+    name: $('#name').value.trim(),
+    email: $('#email').value.trim(),
+    phone: $('#phone').value.trim(),
+    cpf: $('#cpf').value,
+    password: $('#password').value,
+    role,
+    termsAccepted: $('#terms').checked,
+    privacyAccepted: $('#privacy').checked,
+  };
+  try{
+    await register(payload);
+    // auto-login
+    const { login } = await import('./js/auth.js');
+    await login(payload.email, payload.password);
+    toast('Conta criada! Bem-vindo(a) à Konektra.', 'ok');
+    setTimeout(() => location.href = 'dashboard.html', 400);
+  }catch(ex){
+    err.textContent = ex.message; err.hidden = false;
+  }
+});
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

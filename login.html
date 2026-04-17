@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Entrar — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links">
+    <a href="register.html">Criar conta</a>
+  </nav>
+</header>
+<main class="shell">
+  <div class="auth-wrap">
+    <h1>Entrar</h1>
+    <p class="sub">Acesse com o e-mail e a senha que você cadastrou.</p>
+    <form id="loginForm" class="form" autocomplete="off" novalidate>
+      <label>E-mail
+        <input id="email" type="email" required placeholder="voce@exemplo.com" />
+      </label>
+      <label>Senha
+        <input id="password" type="password" required placeholder="Sua senha" />
+      </label>
+      <div id="formError" class="error" hidden></div>
+      <button class="btn btn-primary btn-lg btn-block" type="submit">Entrar</button>
+      <p class="hint">Novo por aqui? <a href="register.html">Criar conta</a></p>
+    </form>
+  </div>
+</main>
+<script type="module">
+import { login } from './js/auth.js';
+import { $, qs, toast } from './js/ui.js';
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('#formError'); err.hidden = true;
+  try{
+    await login($('#email').value.trim(), $('#password').value);
+    toast('Login realizado!', 'ok');
+    const next = qs('next');
+    setTimeout(() => location.href = (next && /^[a-z0-9_.-]+\.html$/i.test(next)) ? next : 'dashboard.html', 300);
+  }catch(ex){
+    err.textContent = ex.message; err.hidden = false;
+  }
+});
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

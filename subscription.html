@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Planos — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links"></nav>
+</header>
+<main class="shell">
+  <section class="panel">
+    <h2>Planos para profissionais</h2>
+    <p class="muted">A Konektra é gratuita para clientes. Profissionais escolhem um plano para ganhar destaque e acesso a ferramentas avançadas. <b>100% da receita da Konektra vem das assinaturas.</b></p>
+  </section>
+
+  <section class="plan-grid" id="plans">
+    <article class="plan">
+      <span class="badge" style="background:#1a225e;color:#b4c2ff">FREE</span>
+      <h3>Básico</h3>
+      <div class="price">R$ 0<span class="muted">/mês</span></div>
+      <ul>
+        <li>Perfil público</li>
+        <li>Até 5 chamadas urgentes por mês</li>
+        <li>Sem selo Konektra</li>
+        <li>Posição padrão na busca</li>
+      </ul>
+      <button class="btn" data-plan="free">Selecionar</button>
+    </article>
+
+    <article class="plan highlight">
+      <span class="badge plus">✦ PLUS — recomendado</span>
+      <h3>Plus</h3>
+      <div class="price">R$ 39<span class="muted">,90/mês</span></div>
+      <ul>
+        <li>Até 50 chamadas urgentes por mês</li>
+        <li>Selo "Plus" no perfil e na busca</li>
+        <li>+12% de boost no ranking de busca e urgência</li>
+        <li>Agenda com confirmação automática</li>
+      </ul>
+      <button class="btn btn-primary" data-plan="plus">Assinar Plus</button>
+    </article>
+
+    <article class="plan">
+      <span class="badge infinity">∞ INFINITY</span>
+      <h3>Infinity</h3>
+      <div class="price">R$ 89<span class="muted">,90/mês</span></div>
+      <ul>
+        <li>Chamadas urgentes ilimitadas</li>
+        <li>Topo da busca (boost de 25%)</li>
+        <li>Badge de destaque animado</li>
+        <li>Suporte prioritário + relatórios</li>
+      </ul>
+      <button class="btn btn-primary" data-plan="infinity">Assinar Infinity</button>
+    </article>
+  </section>
+
+  <section class="panel">
+    <h2>Como pagamos</h2>
+    <p class="muted">Esta é uma demo: o "pagamento" apenas ativa o plano localmente. Em produção, integraríamos com Stripe/PagSeguro/MercadoPago, com notas fiscais, PIX recorrente e faturas acessíveis no painel.</p>
+    <div id="status" class="chip">—</div>
+  </section>
+</main>
+
+<script type="module">
+import { requireAuth } from './js/auth.js';
+import { db, findPro } from './js/db.js';
+import { $, $$, toast } from './js/ui.js';
+
+const me = await requireAuth();
+if (me.role !== 'pro' && me.role !== 'both'){
+  $('#status').textContent = 'Você está logado como cliente. Crie um perfil profissional no painel para assinar um plano.';
+} else {
+  const pro = findPro(me.id);
+  $('#status').className = 'chip ' + (pro.plan === 'free' ? '' : 'ok');
+  $('#status').textContent = 'Plano atual: ' + pro.plan.toUpperCase() + (pro.planPaidUntil ? ' • vigente até ' + new Date(pro.planPaidUntil).toLocaleDateString('pt-BR') : '');
+  $$('#plans [data-plan]').forEach(b => b.addEventListener('click', () => {
+    const plan = b.dataset.plan;
+    db.save(d => {
+      const p = d.pros.find(x => x.userId === me.id);
+      p.plan = plan; p.planSince = Date.now();
+      p.planPaidUntil = plan === 'free' ? null : Date.now() + 30*24*3600*1000;
+    });
+    toast('Plano atualizado para ' + plan.toUpperCase(), 'ok');
+    setTimeout(() => location.reload(), 400);
+  }));
+}
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

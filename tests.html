@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Testes automatizados — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+<style>
+  .test-item{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.02);margin-bottom:6px;font-family:ui-monospace,monospace;font-size:13px}
+  .test-item.pass{border-color:rgba(61,220,151,.45);background:rgba(61,220,151,.08)}
+  .test-item.fail{border-color:rgba(255,92,122,.45);background:rgba(255,92,122,.08)}
+  .tag-pass{color:#9effd0;font-weight:700}
+  .tag-fail{color:#ffc2ce;font-weight:700}
+  .summary{display:flex;gap:12px;margin-bottom:14px;font-size:15px}
+  .summary .chip{font-size:14px}
+</style>
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links"><a href="index.html">Início</a></nav>
+</header>
+<main class="shell">
+  <section class="panel">
+    <h2>Testes automatizados</h2>
+    <p class="muted">Esta suíte verifica os fluxos críticos do Konektra: criptografia, validações, cadastro, login, persistência, matching do modo urgente, avaliações e booking.</p>
+    <div class="summary" id="summary">
+      <span class="chip">Aguardando…</span>
+    </div>
+    <div id="results"></div>
+    <p class="hint">⚠️ A execução usa um namespace isolado no localStorage e restaura seus dados ao final.</p>
+    <div class="row-wrap" style="margin-top:10px">
+      <button class="btn btn-primary" id="run">Rodar novamente</button>
+      <button class="btn" id="seed">Gerar dados de exemplo</button>
+      <a class="btn" href="search.html">Ver resultados no app</a>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { $, $$, toast } from './js/ui.js';
+import {
+  hashPassword, verifyPassword, signSession, verifySession, randomId, sha256,
+} from './js/crypto.js';
+
+// We run tests against a temporary "namespace" by backing up and restoring
+// the real localStorage db key.
+const REAL_KEY = 'konektra.db.v1';
+const BACKUP_KEY = 'konektra.db.v1.backup';
+
+const tests = [];
+function test(name, fn){ tests.push({ name, fn }); }
+
+// === Test cases ===
+test('Web Crypto: PBKDF2 gera salt/hash e verifica corretamente', async () => {
+  const out = await hashPassword('minhaSenha@123');
+  assert(out.salt && out.hash && out.iter === 120000, 'hash payload incompleto');
+  const ok = await verifyPassword('minhaSenha@123', out);
+  assert(ok, 'verifyPassword falhou para senha correta');
+  const bad = await verifyPassword('errada', out);
+  assert(!bad, 'verifyPassword aceitou senha errada');
+});
+
+test('PBKDF2: comparação em tempo constante (tamanhos diferentes falham)', async () => {
+  const out = await hashPassword('abc');
+  const ok = await verifyPassword('abc', out);
+  assert(ok, 'hash válido rejeitado');
+  const fake = { ...out, hash: out.hash.slice(0,-1) };
+  const bad = await verifyPassword('abc', fake);
+  assert(!bad, 'hash truncado deveria falhar');
+});
+
+test('HMAC session token: assina e verifica, expira corretamente', async () => {
+  const payload = { sub:'u_1', role:'client', exp: Date.now()+1000 };
+  const tok = await signSession(payload, 'secret-x');
+  const decoded = await verifySession(tok, 'secret-x');
+  assert(decoded && decoded.sub === 'u_1', 'sessão não decodificou');
+  const wrongSecret = await verifySession(tok, 'other');
+  assert(!wrongSecret, 'segredo errado deveria falhar');
+  const expired = await signSession({ sub:'u_2', exp: Date.now() - 10 }, 'k');
+  const r = await verifySession(expired, 'k');
+  assert(!r, 'token expirado deveria falhar');
+});
+
+test('SHA-256: hash determinístico', async () => {
+  const a = await sha256('konektra');
+  const b = await sha256('konektra');
+  const c = await sha256('Konektra');
+  assert(a === b, 'sha256 não determinístico');
+  assert(a !== c, 'sha256 ignorou caixa');
+});
+
+test('randomId: único e prefixado', () => {
+  const a = randomId('u'); const b = randomId('u');
+  assert(a.startsWith('u_') && a !== b, 'ids duplicados ou sem prefixo');
+});
+
+test('Validação de e-mail', async () => {
+  const { validateEmail } = await import('./js/auth.js?r=' + Date.now());
+  assert(validateEmail('a@b.co'), 'e-mail válido rejeitado');
+  assert(!validateEmail('semarroba.com'), 'e-mail inválido aceito');
+  assert(!validateEmail(''), 'vazio aceito');
+});
+
+test('Validação de CPF', async () => {
+  const { validateCPF } = await import('./js/auth.js?r=' + Date.now());
+  // CPF válido conhecido
+  assert(validateCPF('529.982.247-25'), 'CPF válido rejeitado');
+  assert(!validateCPF('111.111.111-11'), 'CPF com dígitos repetidos aceito');
+  assert(!validateCPF('123.456.789-00'), 'CPF inválido aceito');
+});
+
+test('Força de senha', async () => {
+  const { passwordStrength } = await import('./js/auth.js?r=' + Date.now());
+  assert(passwordStrength('') === 0, 'vazia deveria ser 0');
+  assert(passwordStrength('abcdefgh') >= 1, 'senha com tamanho mínimo');
+  assert(passwordStrength('Abcdef12!') >= 4, 'senha forte');
+});
+
+test('Cadastro: cliente', async () => {
+  resetDb();
+  const { register } = await import('./js/auth.js?r=' + Date.now());
+  const u = await register({
+    name:'Ana Cliente', email:'ana@exemplo.com', phone:'(11) 90000-0001',
+    cpf:'529.982.247-25', password:'SenhaForte@123', role:'client',
+    termsAccepted:true, privacyAccepted:true,
+  });
+  assert(u && u.id && u.role === 'client', 'usuário não criado');
+  const d = JSON.parse(localStorage.getItem(REAL_KEY));
+  assert(d.users.length === 1, 'usuário não persistido');
+  assert(!d.pros.length, 'não deveria criar perfil pro para cliente');
+});
+
+test('Cadastro: profissional cria entrada em pros', async () => {
+  resetDb();
+  const { register } = await import('./js/auth.js?r=' + Date.now());
+  const u = await register({
+    name:'Bruno Dev', email:'bruno@exemplo.com', phone:'(11) 90000-0002',
+    cpf:'529.982.247-25', password:'Outra@Senha1', role:'pro',
+    termsAccepted:true, privacyAccepted:true,
+  });
+  const d = JSON.parse(localStorage.getItem(REAL_KEY));
+  assert(d.pros.length === 1 && d.pros[0].userId === u.id, 'pro não criado');
+  assert(d.pros[0].plan === 'free', 'plano default deveria ser free');
+});
+
+test('Cadastro: e-mail duplicado é rejeitado', async () => {
+  resetDb();
+  const { register } = await import('./js/auth.js?r=' + Date.now());
+  await register({
+    name:'Clara', email:'clara@exemplo.com', phone:'11900000003', cpf:'529.982.247-25',
+    password:'Forte@12345', role:'client', termsAccepted:true, privacyAccepted:true,
+  });
+  let threw = false;
+  try{
+    await register({
+      name:'Outra Clara', email:'clara@exemplo.com', phone:'11900000004', cpf:'529.982.247-25',
+      password:'Forte@12345', role:'client', termsAccepted:true, privacyAccepted:true,
+    });
+  }catch{ threw = true; }
+  assert(threw, 'cadastro duplicado deveria falhar');
+});
+
+test('Cadastro exige aceite de termos e LGPD', async () => {
+  resetDb();
+  const { register } = await import('./js/auth.js?r=' + Date.now());
+  let threw = false;
+  try{
+    await register({ name:'X', email:'x@x.co', phone:'11900000000', cpf:'529.982.247-25', password:'Forte@12345', role:'client', termsAccepted:false, privacyAccepted:true });
+  }catch{ threw = true; }
+  assert(threw, 'deveria exigir termos');
+});
+
+test('Login: credenciais corretas retornam usuário', async () => {
+  resetDb();
+  const auth = await import('./js/auth.js?r=' + Date.now());
+  await auth.register({ name:'Diana', email:'d@x.co', phone:'11900000005', cpf:'529.982.247-25', password:'Forte@12345', role:'client', termsAccepted:true, privacyAccepted:true });
+  const u = await auth.login('d@x.co', 'Forte@12345');
+  assert(u && u.email === 'd@x.co', 'login não retornou usuário');
+  const cu = await auth.currentUser();
+  assert(cu && cu.id === u.id, 'currentUser não retornou após login');
+});
+
+test('Login: senha errada rejeitada', async () => {
+  resetDb();
+  const auth = await import('./js/auth.js?r=' + Date.now());
+  await auth.register({ name:'E', email:'e@x.co', phone:'11900000006', cpf:'529.982.247-25', password:'Forte@12345', role:'client', termsAccepted:true, privacyAccepted:true });
+  let threw = false;
+  try{ await auth.login('e@x.co', 'errada'); }catch{ threw = true; }
+  assert(threw, 'deveria rejeitar senha errada');
+});
+
+test('Haversine: distâncias conhecidas', async () => {
+  const { haversineKm } = await import('./js/geo.js?r=' + Date.now());
+  const sp = { lat:-23.55, lng:-46.63 };
+  const rj = { lat:-22.91, lng:-43.17 };
+  const d = haversineKm(sp, rj);
+  assert(Math.abs(d - 360) < 30, 'distância SP-RJ deve ser ~360km, obteve '+d.toFixed(1));
+  const same = haversineKm(sp, sp);
+  assert(same < 0.001, 'mesma posição deveria retornar ~0');
+});
+
+test('Matching urgente: pro com serviço, disponível e dentro do raio é selecionado', async () => {
+  const { proMatchesCall } = await import('./js/geo.js?r=' + Date.now());
+  const pro = { userId:'p1', available:true, services:['petsitter'], location:{lat:-23.55,lng:-46.63}, radiusKm:10 };
+  const call = { serviceCat:'petsitter', lat:-23.553, lng:-46.635, radiusKm:10 };
+  assert(proMatchesCall(pro, call), 'match esperado');
+  assert(!proMatchesCall({...pro, available:false}, call), 'indisponível não deveria casar');
+  assert(!proMatchesCall({...pro, services:['manicure']}, call), 'serviço diferente não deveria casar');
+  assert(!proMatchesCall({...pro, location:{lat:0,lng:0}}, call), 'longe não deveria casar');
+});
+
+test('DB: média de avaliação e persistência', async () => {
+  resetDb();
+  const { db, avgRating } = await import('./js/db.js?r=' + Date.now());
+  db.save(d => {
+    d.users.push({ id:'u1', name:'Target', email:'t@x.co', role:'pro', createdAt:Date.now() });
+    d.ratings.push({ id:'r1', toId:'u1', fromId:'u2', stars:5, comment:'', createdAt:Date.now() });
+    d.ratings.push({ id:'r2', toId:'u1', fromId:'u3', stars:3, comment:'', createdAt:Date.now() });
+    d.ratings.push({ id:'r3', toId:'u1', fromId:'u4', stars:4, comment:'', createdAt:Date.now() });
+  });
+  const r = avgRating('u1');
+  assert(r.count === 3, 'contagem errada: '+r.count);
+  assert(r.avg === 4, 'média deveria ser 4, obteve '+r.avg);
+});
+
+test('Booking flow end-to-end: request → accept → done → rating', async () => {
+  resetDb();
+  const auth = await import('./js/auth.js?r=' + Date.now());
+  const { db, avgRating } = await import('./js/db.js?r=' + Date.now());
+  const client = await auth.register({ name:'Cli', email:'cli@x.co', phone:'11900000007', cpf:'529.982.247-25', password:'Forte@12345', role:'client', termsAccepted:true, privacyAccepted:true });
+  const pro = await auth.register({ name:'Pro', email:'pro@x.co', phone:'11900000008', cpf:'529.982.247-25', password:'Forte@12345', role:'pro', termsAccepted:true, privacyAccepted:true });
+  const bookingId = 'bk_x';
+  db.save(d => {
+    d.bookings.push({ id:bookingId, clientId:client.id, proId:pro.id, serviceCat:'petsitter', status:'requested', price:80, createdAt:Date.now() });
+  });
+  // accept
+  db.save(d => { d.bookings.find(b => b.id===bookingId).status = 'accepted'; });
+  // done
+  db.save(d => { const b = d.bookings.find(b => b.id===bookingId); b.status='done'; b.doneAt = Date.now(); });
+  // rate
+  db.save(d => d.ratings.push({ id:'r_x', bookingId, fromId:client.id, toId:pro.id, stars:5, comment:'Excelente', createdAt:Date.now() }));
+  const r = avgRating(pro.id);
+  assert(r.avg === 5 && r.count === 1, 'avaliação não consolidada');
+});
+
+// === runner ===
+function assert(cond, msg){ if (!cond) throw new Error(msg || 'assertion failed'); }
+
+function resetDb(){
+  localStorage.removeItem(REAL_KEY);
+  sessionStorage.clear();
+}
+
+async function backup(){
+  const cur = localStorage.getItem(REAL_KEY);
+  if (cur !== null) localStorage.setItem(BACKUP_KEY, cur);
+}
+async function restore(){
+  const b = localStorage.getItem(BACKUP_KEY);
+  if (b !== null){ localStorage.setItem(REAL_KEY, b); localStorage.removeItem(BACKUP_KEY); }
+  else localStorage.removeItem(REAL_KEY);
+}
+
+async function runAll(){
+  await backup();
+  const box = $('#results'); box.innerHTML = '';
+  let pass = 0, fail = 0;
+  const sum = $('#summary'); sum.innerHTML = '<span class="chip">Rodando…</span>';
+  for (const t of tests){
+    const row = document.createElement('div');
+    row.className = 'test-item';
+    row.innerHTML = `<span>•</span><span><b>${t.name}</b></span>`;
+    box.append(row);
+    try{
+      await t.fn();
+      row.classList.add('pass');
+      row.innerHTML = `<span class="tag-pass">PASS</span><span>${t.name}</span>`;
+      pass++;
+    }catch(ex){
+      row.classList.add('fail');
+      row.innerHTML = `<span class="tag-fail">FAIL</span><span><b>${t.name}</b><br><small>${ex.message}</small></span>`;
+      fail++;
+    }
+  }
+  await restore();
+  sum.innerHTML = `
+    <span class="chip ok">✓ ${pass} passou</span>
+    <span class="chip ${fail?'bad':''}">✗ ${fail} falhou</span>
+    <span class="chip">Total: ${tests.length}</span>
+  `;
+  if (!fail) toast(`Todos os ${pass} testes passaram!`, 'ok'); else toast(`${fail} teste(s) falharam.`, 'err');
+}
+
+$('#run').addEventListener('click', runAll);
+$('#seed').addEventListener('click', async () => {
+  const auth = await import('./js/auth.js?r=' + Date.now());
+  const { db } = await import('./js/db.js?r=' + Date.now());
+  db.save(d => { d.users = []; d.pros = []; d.bookings = []; d.ratings = []; d.urgentCalls = []; d.events = []; });
+  const pw = 'Forte@12345';
+  const nicki = await auth.register({ name:'Nicki Pereira', email:'nicki@exemplo.com', phone:'11900001111', cpf:'529.982.247-25', password:pw, role:'pro', termsAccepted:true, privacyAccepted:true });
+  const andre = await auth.register({ name:'André Costa', email:'andre@exemplo.com', phone:'11900002222', cpf:'529.982.247-25', password:pw, role:'pro', termsAccepted:true, privacyAccepted:true });
+  const lia  = await auth.register({ name:'Lia Souza', email:'lia@exemplo.com', phone:'11900003333', cpf:'529.982.247-25', password:pw, role:'client', termsAccepted:true, privacyAccepted:true });
+  db.save(d => {
+    const p1 = d.pros.find(p => p.userId === nicki.id);
+    p1.headline = 'Pet sitter premiada — São Paulo'; p1.services = ['petsitter','baba']; p1.hourly = 60; p1.radiusKm = 15; p1.available = true;
+    p1.location = { lat:-23.55, lng:-46.63, city:'São Paulo — Pinheiros' }; p1.verified = true; p1.plan = 'plus'; p1.planPaidUntil = Date.now() + 30*86400000;
+    const p2 = d.pros.find(p => p.userId === andre.id);
+    p2.headline = 'Eletricista 24h'; p2.services = ['eletricista','encanador']; p2.hourly = 120; p2.radiusKm = 20; p2.available = true;
+    p2.location = { lat:-23.56, lng:-46.65, city:'São Paulo — Vila Madalena' }; p2.verified = true; p2.plan = 'infinity'; p2.planPaidUntil = Date.now() + 30*86400000;
+    d.ratings.push({ id:'rs1', bookingId:'x', fromId:lia.id, toId:nicki.id, stars:5, comment:'Cuidou do meu pet com amor!', createdAt:Date.now()-86400000 });
+    d.ratings.push({ id:'rs2', bookingId:'y', fromId:lia.id, toId:andre.id, stars:4, comment:'Resolveu rápido.', createdAt:Date.now()-3600000 });
+  });
+  toast('Dados de exemplo gerados. Explore em /search.html.', 'ok');
+});
+
+runAll();
+</script>
+</body>
+</html>

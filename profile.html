@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Perfil — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links"></nav>
+</header>
+<main class="shell">
+  <section class="panel" id="profilePanel"></section>
+  <section class="panel" id="hirePanel" hidden>
+    <h2>Contratar</h2>
+    <form id="hireForm" class="form">
+      <label>Serviço
+        <select id="hireCat"></select>
+      </label>
+      <label>Observações (opcional)
+        <textarea id="hireNote" placeholder="Descreva o que precisa"></textarea>
+      </label>
+      <button class="btn btn-primary" type="submit">Enviar pedido</button>
+    </form>
+  </section>
+  <section class="panel" id="ratePanel" hidden>
+    <h2>Avaliar</h2>
+    <div class="rating-row">
+      <div class="stars" id="rateStars">
+        <button type="button" data-n="1">★</button>
+        <button type="button" data-n="2">★</button>
+        <button type="button" data-n="3">★</button>
+        <button type="button" data-n="4">★</button>
+        <button type="button" data-n="5">★</button>
+      </div>
+      <span id="rateValue" class="muted">selecione</span>
+    </div>
+    <textarea id="rateComment" class="form" style="width:100%;margin-top:10px;padding:10px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid var(--border);color:#fff" placeholder="Comente a experiência (opcional)"></textarea>
+    <div style="margin-top:10px"><button class="btn btn-primary" id="rateSave" disabled>Enviar avaliação</button></div>
+  </section>
+  <section class="panel">
+    <h2>Avaliações</h2>
+    <div id="ratings" class="list"></div>
+  </section>
+</main>
+
+<script type="module">
+import { currentUser, SERVICE_CATEGORIES } from './js/auth.js';
+import { db, findUser, findPro, avgRating } from './js/db.js';
+import { randomId } from './js/crypto.js';
+import { $, $$, h, stars, initials, fmtMoney, fmtTime, qs, toast } from './js/ui.js';
+
+const targetId = qs('id');
+const target = findUser(targetId);
+const me = await currentUser();
+
+if (!target){ document.querySelector('main').innerHTML = '<section class="panel"><h2>Perfil não encontrado</h2></section>'; throw new Error('no user'); }
+
+const pro = findPro(target.id);
+const r = avgRating(target.id);
+
+function render(){
+  const avatar = target.photo ? h('img', { class:'avatar', src:target.photo, style:'width:72px;height:72px' }) : h('div', { class:'avatar avatar-placeholder', style:'width:72px;height:72px;font-size:22px' }, initials(target.name));
+  const plan = pro?.plan === 'infinity' ? h('span', { class:'badge infinity' }, '∞ INFINITY')
+    : pro?.plan === 'plus' ? h('span', { class:'badge plus' }, '✦ PLUS') : null;
+  const verified = pro?.verified ? h('span', { class:'badge verified' }, '✓ Verificado') : null;
+  const content = [
+    h('div', { class:'pro-head', style:'gap:16px' }, avatar,
+      h('div', {}, h('h2', { style:'margin:0' }, target.name),
+        h('div', { class:'pro-sub' }, pro?.headline || (target.role === 'client' ? 'Cliente' : 'Profissional')),
+        h('div', { class:'row-wrap', style:'margin-top:6px' },
+          r.count ? h('span', { class:'chip star' }, stars(r.avg)+' '+r.avg+' ('+r.count+')') : h('span', { class:'chip' }, 'Sem avaliações'),
+          verified, plan,
+          pro?.available ? h('span', { class:'chip ok' }, 'Disponível agora') : null,
+        ))),
+    pro ? h('div', {},
+      h('h3', {}, 'Sobre'),
+      h('p', { class:'muted' }, pro.bio || '—'),
+      h('h3', {}, 'Serviços'),
+      h('div', { class:'row-wrap' }, ...pro.services.map(id => {
+        const c = SERVICE_CATEGORIES.find(x => x.id===id); if (!c) return null;
+        return h('span', { class:'chip' }, c.emoji+' '+c.label);
+      })),
+      h('dl', { class:'kvs', style:'margin-top:14px' },
+        h('dt', {}, 'Preço/hora'), h('dd', {}, pro.hourly ? fmtMoney(pro.hourly) : 'A combinar'),
+        h('dt', {}, 'Atua em'), h('dd', {}, (pro.location?.city || '—') + ' • raio ' + (pro.radiusKm||10) + ' km'),
+        h('dt', {}, 'Plano'), h('dd', {}, pro.plan || 'free'),
+      )
+    ) : null,
+  ].filter(Boolean);
+  const p = $('#profilePanel'); p.innerHTML = ''; content.forEach(c => p.append(c));
+}
+render();
+
+// Hire panel
+if (me && me.id !== target.id && pro){
+  $('#hirePanel').hidden = false;
+  for (const c of SERVICE_CATEGORIES){
+    if (!pro.services.includes(c.id)) continue;
+    $('#hireCat').append(h('option', { value:c.id }, c.emoji+' '+c.label));
+  }
+  $('#hireForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const cat = $('#hireCat').value; if (!cat){ toast('Profissional sem serviços cadastrados.','err'); return; }
+    const id = randomId('bk');
+    db.save(d => d.bookings.push({ id, clientId:me.id, proId:target.id, serviceCat:cat, status:'requested', price:pro.hourly||0, createdAt:Date.now(), urgent:false, note:$('#hireNote').value.trim() }));
+    toast('Pedido enviado!', 'ok');
+    setTimeout(()=> location.href='dashboard.html#pedidos', 400);
+  });
+}
+
+// Rating panel — only appears when there's a concluded booking with target
+if (me && me.id !== target.id){
+  const d = db.get();
+  const doneBookings = d.bookings.filter(b => b.status === 'done' && ((b.clientId===me.id && b.proId===target.id) || (b.proId===me.id && b.clientId===target.id)));
+  const already = d.ratings.some(r => r.fromId===me.id && r.toId===target.id && doneBookings.some(b => b.id===r.bookingId));
+  if (doneBookings.length && !already){
+    $('#ratePanel').hidden = false;
+    let val = 0;
+    $$('#rateStars button').forEach(b => b.addEventListener('click', () => {
+      val = Number(b.dataset.n);
+      $$('#rateStars button').forEach(x => x.classList.toggle('on', Number(x.dataset.n) <= val));
+      $('#rateValue').textContent = val+'/5';
+      $('#rateSave').disabled = !val;
+    }));
+    $('#rateSave').addEventListener('click', () => {
+      const bk = doneBookings[0];
+      db.save(d => d.ratings.push({ id:randomId('r'), bookingId:bk.id, fromId:me.id, toId:target.id, stars:val, comment:$('#rateComment').value.trim(), createdAt:Date.now() }));
+      toast('Avaliação enviada!', 'ok');
+      setTimeout(()=>location.reload(), 400);
+    });
+  }
+}
+
+// List ratings
+function renderRatings(){
+  const d = db.get();
+  const rs = d.ratings.filter(r => r.toId === target.id).sort((a,b)=>b.createdAt-a.createdAt);
+  const box = $('#ratings'); box.innerHTML = '';
+  if (!rs.length){ box.append(h('p', { class:'muted' }, 'Ainda sem avaliações.')); return; }
+  for (const r of rs){
+    const from = d.users.find(u => u.id === r.fromId);
+    box.append(h('div', { class:'item' },
+      h('div', { class:'meta' },
+        h('div', {}, h('span', { class:'chip star' }, stars(r.stars)+' '+r.stars+'/5'), ' — ', h('b', {}, from?.name || 'Anônimo')),
+        r.comment ? h('div', { class:'muted' }, r.comment) : null,
+        h('div', { class:'muted' }, fmtTime(r.createdAt))
+      )
+    ));
+  }
+}
+renderRatings();
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

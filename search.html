@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Buscar profissionais — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links"></nav>
+</header>
+<main class="shell">
+  <section class="panel">
+    <h2>Encontrar profissionais</h2>
+    <form id="searchForm" class="form">
+      <div class="row">
+        <label>Serviço
+          <select id="cat"><option value="">Todos</option></select>
+        </label>
+        <label>Preço máximo por hora (R$)
+          <input id="maxPrice" type="number" min="0" step="10" placeholder="Sem limite" />
+        </label>
+      </div>
+      <div class="row">
+        <label>Busca por nome / palavra-chave
+          <input id="q" placeholder="Ex.: canal, pintura, sênior" />
+        </label>
+        <label>Ordenar por
+          <select id="sort">
+            <option value="rating">Melhor avaliação</option>
+            <option value="price_asc">Menor preço</option>
+            <option value="distance">Distância (requer GPS)</option>
+            <option value="recent">Mais novos</option>
+          </select>
+        </label>
+      </div>
+      <label class="switch"><input type="checkbox" id="availableOnly" /> Apenas disponíveis agora</label>
+      <div class="row-wrap">
+        <button class="btn btn-primary" type="submit">Buscar</button>
+        <button class="btn" id="btnLocate" type="button">Usar minha localização</button>
+        <span id="locStatus" class="chip">Sem GPS</span>
+      </div>
+    </form>
+  </section>
+
+  <section class="panel">
+    <div id="results" class="pro-grid"></div>
+  </section>
+</main>
+
+<script type="module">
+import { currentUser, SERVICE_CATEGORIES } from './js/auth.js';
+import { db, avgRating } from './js/db.js';
+import { getCurrentLocation, haversineKm } from './js/geo.js';
+import { $, $$, h, stars, initials, fmtMoney, toast } from './js/ui.js';
+
+const me = await currentUser();
+
+const catSel = $('#cat');
+for (const c of SERVICE_CATEGORIES){
+  catSel.append(h('option', { value:c.id }, c.emoji+' '+c.label));
+}
+
+let myLoc = null;
+$('#btnLocate').addEventListener('click', async () => {
+  try{ myLoc = await getCurrentLocation(); $('#locStatus').textContent = `GPS ativo (${myLoc.lat.toFixed(3)},${myLoc.lng.toFixed(3)})`; $('#locStatus').className='chip ok'; run(); }
+  catch(ex){ toast(ex.message, 'err'); }
+});
+
+$('#searchForm').addEventListener('submit', (e) => { e.preventDefault(); run(); });
+catSel.addEventListener('change', run); $('#sort').addEventListener('change', run); $('#availableOnly').addEventListener('change', run);
+
+function run(){
+  const d = db.get();
+  const cat = $('#cat').value;
+  const q = $('#q').value.trim().toLowerCase();
+  const max = Number($('#maxPrice').value) || 0;
+  const availOnly = $('#availableOnly').checked;
+  const sort = $('#sort').value;
+
+  let rows = d.pros
+    .filter(p => !me || p.userId !== me.id)
+    .map(p => ({ pro:p, user: d.users.find(u => u.id === p.userId) }))
+    .filter(r => r.user && (r.user.role === 'pro' || r.user.role === 'both'))
+    .filter(r => !cat || r.pro.services.includes(cat))
+    .filter(r => !availOnly || r.pro.available)
+    .filter(r => !max || (r.pro.hourly && r.pro.hourly <= max))
+    .filter(r => !q || (r.user.name.toLowerCase().includes(q) || (r.pro.headline||'').toLowerCase().includes(q) || (r.pro.bio||'').toLowerCase().includes(q)))
+    .map(r => ({ ...r, rating: avgRating(r.user.id), dist: (myLoc && r.pro.location) ? haversineKm(myLoc, r.pro.location) : null }));
+
+  if (sort === 'rating') rows.sort((a,b) => (b.rating.avg - a.rating.avg) || (b.rating.count - a.rating.count));
+  else if (sort === 'price_asc') rows.sort((a,b) => (a.pro.hourly||9999) - (b.pro.hourly||9999));
+  else if (sort === 'distance') rows.sort((a,b) => (a.dist ?? 9e9) - (b.dist ?? 9e9));
+  else if (sort === 'recent') rows.sort((a,b) => b.user.createdAt - a.user.createdAt);
+
+  // plan boost: infinity first, then plus, when tied
+  rows.sort((a,b) => rank(b.pro.plan) - rank(a.pro.plan));
+
+  const box = $('#results'); box.innerHTML = '';
+  if (!rows.length){ box.append(h('p', { class:'muted' }, 'Nenhum profissional encontrado. Ajuste os filtros.')); return; }
+  for (const r of rows) box.append(card(r));
+}
+function rank(plan){ return plan === 'infinity' ? 2 : plan === 'plus' ? 1 : 0; }
+
+function card({ user, pro, rating, dist }){
+  const services = pro.services.slice(0,3).map(id => SERVICE_CATEGORIES.find(c => c.id===id)).filter(Boolean);
+  const avatar = user.photo
+    ? h('img', { class:'avatar', src:user.photo, alt:'' })
+    : h('div', { class:'avatar avatar-placeholder' }, initials(user.name));
+  const planBadge = pro.plan === 'infinity' ? h('span', { class:'badge infinity' }, '∞ INFINITY')
+    : pro.plan === 'plus' ? h('span', { class:'badge plus' }, '✦ PLUS')
+    : null;
+  return h('article', { class:'pro-card' },
+    h('div', { class:'pro-head' }, avatar,
+      h('div', {}, h('div', { class:'pro-name' }, user.name),
+        h('div', { class:'pro-sub' }, pro.headline || (pro.location?.city || 'Profissional')))
+    ),
+    h('div', { class:'row-wrap' },
+      rating.count ? h('span', { class:'chip star' }, stars(rating.avg)+' '+rating.avg+' ('+rating.count+')') : h('span', { class:'chip' }, 'Sem avaliações'),
+      pro.available ? h('span', { class:'chip ok' }, 'Disponível agora') : h('span', { class:'chip' }, 'Sob agenda'),
+      pro.verified ? h('span', { class:'badge verified' }, '✓ Verificado') : null,
+      planBadge,
+      dist != null ? h('span', { class:'chip' }, dist.toFixed(1)+' km') : null,
+    ),
+    h('div', { class:'row-wrap' }, ...services.map(s => h('span', { class:'chip' }, s.emoji+' '+s.label))),
+    h('div', { class:'row-wrap', style:'justify-content:space-between;align-items:center' },
+      h('div', { class:'pro-price' }, pro.hourly ? fmtMoney(pro.hourly) + '/h' : 'A combinar'),
+      h('a', { class:'btn btn-primary', href:`profile.html?id=${user.id}` }, 'Ver perfil')
+    )
+  );
+}
+
+run();
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

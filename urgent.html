@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Chamada urgente — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links"></nav>
+</header>
+
+<main class="shell">
+  <div class="banner urgent">
+    <b>Modo urgente</b> — como no Uber: seu pedido aparece em tempo real para os profissionais disponíveis no raio definido. Quem aceitar primeiro atende.
+  </div>
+
+  <section class="panel">
+    <h2>Preciso agora</h2>
+    <form id="urgentForm" class="form">
+      <label>Serviço
+        <select id="cat" required></select>
+      </label>
+      <div class="row">
+        <label>Raio (km)
+          <input id="radius" type="number" min="1" max="50" value="5" />
+        </label>
+        <label>Orçamento máximo por hora (R$)
+          <input id="budget" type="number" min="0" step="10" placeholder="Sem limite" />
+        </label>
+      </div>
+      <label>Observações
+        <textarea id="note" placeholder="Descreva o que precisa, endereço de referência, etc."></textarea>
+      </label>
+      <div id="err" class="error" hidden></div>
+      <button id="sosBtn" class="sos" type="submit" aria-label="Enviar chamada urgente">SOS<br>URGÊNCIA</button>
+    </form>
+  </section>
+
+  <section class="panel">
+    <h2>Profissionais próximos</h2>
+    <p class="muted" id="matchInfo">Envie uma chamada para ver quem está disponível.</p>
+    <div id="matches" class="pro-grid"></div>
+  </section>
+
+  <section class="panel" id="proInbox" hidden>
+    <h2>Chamadas urgentes chegando para mim</h2>
+    <p class="muted">Você está disponível. Chamadas no seu raio e serviços aparecem aqui em tempo real.</p>
+    <div id="inbox" class="list"></div>
+  </section>
+</main>
+
+<script type="module">
+import { requireAuth, SERVICE_CATEGORIES } from './js/auth.js';
+import { db, findPro, avgRating } from './js/db.js';
+import { getCurrentLocation, haversineKm, proMatchesCall, scoreMatch } from './js/geo.js';
+import { randomId } from './js/crypto.js';
+import { $, $$, h, stars, initials, fmtMoney, fmtTime, toast } from './js/ui.js';
+
+const me = await requireAuth();
+
+const catSel = $('#cat');
+for (const c of SERVICE_CATEGORIES) catSel.append(h('option', { value:c.id }, c.emoji+' '+c.label));
+
+const myPro = findPro(me.id);
+$('#proInbox').hidden = !(myPro && myPro.available);
+
+$('#urgentForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const err = $('#err'); err.hidden = true;
+  try{
+    const loc = await getCurrentLocation();
+    const call = {
+      id: randomId('call'),
+      clientId: me.id,
+      serviceCat: $('#cat').value,
+      lat: loc.lat, lng: loc.lng,
+      radiusKm: Math.max(1, Math.min(50, Number($('#radius').value) || 5)),
+      note: $('#note').value.trim(),
+      budget: Number($('#budget').value) || 0,
+      status: 'open',
+      createdAt: Date.now(),
+    };
+    db.save(d => d.urgentCalls.push(call));
+    toast('Chamada enviada. Procurando profissionais…');
+    matchCall(call);
+  }catch(ex){ err.textContent = ex.message; err.hidden = false; }
+});
+
+function matchCall(call){
+  const d = db.get();
+  const matches = d.pros
+    .filter(p => p.userId !== me.id)
+    .filter(p => proMatchesCall(p, call))
+    .filter(p => !call.budget || (p.hourly && p.hourly <= call.budget))
+    .map(p => ({ pro:p, user:d.users.find(u => u.id===p.userId), rating:avgRating(p.userId), dist:haversineKm(p.location, {lat:call.lat,lng:call.lng}) }))
+    .sort((a,b) => scoreMatch(b.pro, call, b.rating) - scoreMatch(a.pro, call, a.rating));
+
+  $('#matchInfo').textContent = matches.length
+    ? `${matches.length} profissional(is) disponível(is) no raio de ${call.radiusKm} km.`
+    : 'Ninguém disponível agora. Aumente o raio ou tente depois.';
+  const box = $('#matches'); box.innerHTML = '';
+  for (const m of matches){
+    const hire = h('button', { class:'btn btn-primary', onclick: () => book(call, m) }, 'Contratar agora');
+    box.append(h('article', { class:'pro-card' },
+      h('div', { class:'pro-head' },
+        m.user.photo ? h('img', { class:'avatar', src:m.user.photo }) : h('div', { class:'avatar avatar-placeholder' }, initials(m.user.name)),
+        h('div', {}, h('div', { class:'pro-name' }, m.user.name), h('div', { class:'pro-sub' }, m.pro.headline || '—'))),
+      h('div', { class:'row-wrap' },
+        h('span', { class:'chip' }, m.dist.toFixed(1)+' km'),
+        m.rating.count ? h('span', { class:'chip star' }, stars(m.rating.avg)+' '+m.rating.avg) : h('span', { class:'chip' }, 'Novo'),
+        h('span', { class:'pro-price' }, m.pro.hourly ? fmtMoney(m.pro.hourly)+'/h' : 'A combinar')
+      ),
+      h('div', { class:'row-wrap' }, hire)
+    ));
+  }
+}
+
+function book(call, m){
+  const bookingId = randomId('bk');
+  db.save(d => {
+    d.bookings.push({
+      id: bookingId, clientId: me.id, proId: m.user.id,
+      serviceCat: call.serviceCat, status:'requested',
+      price: m.pro.hourly || 0, createdAt: Date.now(), urgent:true,
+    });
+    const c = d.urgentCalls.find(x => x.id === call.id);
+    if (c){ c.status = 'matched'; c.matchedProId = m.user.id; }
+  });
+  toast('Pedido enviado para ' + m.user.name, 'ok');
+  setTimeout(() => location.href = 'dashboard.html#pedidos', 500);
+}
+
+// pro inbox polling (simulates realtime; in a real app this would be WebSocket/SSE)
+function renderInbox(){
+  if (!myPro || !myPro.available) return;
+  const d = db.get();
+  const calls = d.urgentCalls.filter(c => c.status === 'open')
+    .filter(c => proMatchesCall(myPro, c));
+  const box = $('#inbox'); box.innerHTML = '';
+  if (!calls.length){ box.append(h('p', { class:'muted' }, 'Nenhuma chamada ativa agora.')); return; }
+  for (const c of calls){
+    const client = d.users.find(u => u.id === c.clientId);
+    box.append(h('div', { class:'item' },
+      h('div', { class:'meta' },
+        h('div', {}, h('b', {}, SERVICE_CATEGORIES.find(s=>s.id===c.serviceCat)?.label || c.serviceCat), ' — ', client?.name || 'Cliente'),
+        h('div', { class:'muted' }, fmtTime(c.createdAt) + ' • ' + haversineKm(myPro.location, {lat:c.lat,lng:c.lng}).toFixed(1)+' km' + (c.budget ? ' • ≤ '+fmtMoney(c.budget)+'/h' : '')),
+        c.note ? h('div', {}, c.note) : null,
+      ),
+      h('div', { class:'actions' },
+        h('button', { class:'btn btn-ok', onclick: () => acceptCall(c) }, 'Aceitar')
+      )
+    ));
+  }
+}
+function acceptCall(call){
+  const bookingId = randomId('bk');
+  db.save(d => {
+    d.bookings.push({ id:bookingId, clientId:call.clientId, proId:me.id, serviceCat:call.serviceCat, status:'accepted', price:myPro.hourly||0, createdAt:Date.now(), urgent:true });
+    const c = d.urgentCalls.find(x => x.id === call.id); if (c){ c.status='matched'; c.matchedProId = me.id; }
+  });
+  toast('Chamada aceita. Cliente notificado.', 'ok'); renderInbox();
+}
+renderInbox();
+setInterval(renderInbox, 2500);
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

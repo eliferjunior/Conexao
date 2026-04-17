@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Segurança — Konektra</title><link rel="stylesheet" href="../css/styles.css" /></head>
+<body>
+<header class="nav"><a href="../index.html" class="brand"><img src="../assets/logo.svg" alt="" width="32" height="32" /><span class="brand-name">Konektra</span></a></header>
+<main class="shell">
+<article class="panel">
+<h1>Segurança</h1>
+<p>A segurança é um pilar da Konektra. Esta página resume as práticas aplicadas na aplicação.</p>
+
+<h2>Autenticação</h2>
+<ul>
+  <li><b>Senhas</b>: nunca em texto claro. Derivadas com PBKDF2-SHA256 (120.000 iterações) + salt aleatório de 128 bits por usuário.</li>
+  <li><b>Comparação</b>: em tempo constante para evitar timing attacks.</li>
+  <li><b>Sessão</b>: token assinado com HMAC-SHA256, expiração de 7 dias, armazenado em <code>sessionStorage</code>.</li>
+  <li><b>Requisitos mínimos</b>: mínimo de 8 caracteres com ao menos 3 classes (letras, dígitos, símbolos); indicador de força no cadastro.</li>
+</ul>
+
+<h2>Verificação de identidade</h2>
+<ul>
+  <li>CPF validado pelo algoritmo de dígitos verificadores.</li>
+  <li>Documento (RG/CNH/Passaporte/Conselho) recebido do usuário gera um hash SHA-256 do conteúdo para integridade.</li>
+  <li>Em produção, KYC com provedor certificado (Serpro/Unico/Idwall), prova de vida e OCR com consentimento.</li>
+</ul>
+
+<h2>Geolocalização</h2>
+<ul>
+  <li>Somente com consentimento explícito via Geolocation API.</li>
+  <li>Profissionais controlam o raio de atuação; clientes controlam o raio da chamada urgente.</li>
+  <li>Endereços completos nunca são expostos publicamente — apenas cidade/bairro e distância aproximada.</li>
+</ul>
+
+<h2>Transporte e armazenamento</h2>
+<ul>
+  <li>HTTPS obrigatório em produção (HSTS, TLS 1.2+).</li>
+  <li>Cabeçalhos de segurança recomendados: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy.</li>
+  <li>Em produção: banco em VPC privada, backup criptografado (AES-256), segregação de ambientes.</li>
+</ul>
+
+<h2>Proteção contra abuso</h2>
+<ul>
+  <li>Rate-limit em login e recuperação de senha (camada de backend).</li>
+  <li>Moderação humana para avaliações reportadas.</li>
+  <li>Detecção de fraude em pagamentos via provedor.</li>
+</ul>
+
+<h2>Responsible disclosure</h2>
+<p>Se você encontrar uma vulnerabilidade, envie um e-mail para <code>security@konektra.exemplo</code>. Pedimos 90 dias antes de divulgar publicamente.</p>
+</article>
+</main>
+</body></html>

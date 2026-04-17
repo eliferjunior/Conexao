@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Privacidade (LGPD) — Konektra</title><link rel="stylesheet" href="../css/styles.css" /></head>
+<body>
+<header class="nav"><a href="../index.html" class="brand"><img src="../assets/logo.svg" alt="" width="32" height="32" /><span class="brand-name">Konektra</span></a></header>
+<main class="shell">
+<article class="panel">
+<h1>Política de Privacidade (LGPD)</h1>
+<p class="muted">Última atualização: 17 de abril de 2026.</p>
+
+<h2>1. Dados que coletamos</h2>
+<ul>
+  <li><b>Cadastro:</b> nome, e-mail, telefone, CPF, foto de perfil.</li>
+  <li><b>Perfil profissional:</b> serviços oferecidos, biografia, preço por hora, raio de atuação, localização aproximada.</li>
+  <li><b>Documentação:</b> tipo e número de documento e hash criptográfico do arquivo para verificação (o arquivo em si não é armazenado em servidores nesta demo).</li>
+  <li><b>Uso:</b> pedidos, avaliações, chamadas urgentes, eventos de auditoria.</li>
+</ul>
+
+<h2>2. Base legal</h2>
+<p>Tratamos dados com base em: (i) execução de contrato, (ii) consentimento explícito para geolocalização e documentos, (iii) legítimo interesse para segurança e prevenção de fraudes, e (iv) cumprimento de obrigação legal/regulatória.</p>
+
+<h2>3. Compartilhamento</h2>
+<p>Compartilhamos apenas o que é necessário para o serviço: dados do perfil público (nome, foto, avaliações) com outros usuários; dados do pedido com o profissional/cliente envolvido; provedores de pagamento e infraestrutura, sob contratos de confidencialidade.</p>
+
+<h2>4. Segurança</h2>
+<ul>
+  <li>Senhas armazenadas com PBKDF2-SHA256, 120.000 iterações, salt único por usuário.</li>
+  <li>Sessão com token HMAC-SHA256 e expiração de 7 dias.</li>
+  <li>Documentos protegidos por hash SHA-256; em produção, criptografia em repouso AES-256.</li>
+  <li>Conexões em HTTPS; HSTS em produção.</li>
+</ul>
+
+<h2>5. Seus direitos</h2>
+<p>Você pode, a qualquer momento:</p>
+<ul>
+  <li>Acessar, corrigir e atualizar seus dados no painel.</li>
+  <li>Exportar todos os seus dados em formato JSON (botão "Exportar dados").</li>
+  <li>Excluir sua conta, apagando localmente todos os dados associados.</li>
+  <li>Revogar consentimentos (geolocalização, notificações) nas configurações do dispositivo.</li>
+</ul>
+
+<h2>6. Retenção</h2>
+<p>Guardamos seus dados enquanto sua conta estiver ativa. Dados financeiros são mantidos pelo prazo legal (5 anos). Ao excluir a conta, dados pessoais são apagados em até 30 dias, exceto quando a lei exigir retenção.</p>
+
+<h2>7. Encarregado (DPO)</h2>
+<p>privacidade@konektra.exemplo — para dúvidas, solicitações ou reclamações. Você também pode contatar a ANPD (gov.br/anpd).</p>
+</article>
+</main>
+</body></html>

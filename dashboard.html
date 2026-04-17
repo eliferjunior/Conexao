@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Painel — Konektra</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+<header class="nav">
+  <a href="index.html" class="brand"><img src="assets/logo.svg" alt="" width="36" height="36" /><span class="brand-name">Konektra</span></a>
+  <nav class="nav-links"></nav>
+</header>
+
+<main class="shell">
+  <div class="dash-grid">
+    <aside class="side">
+      <a href="#perfil" class="active">Perfil</a>
+      <a href="#profissional" id="link-pro">Profissional</a>
+      <a href="#pedidos">Pedidos</a>
+      <a href="#avaliacoes">Avaliações</a>
+      <a href="#dados">Meus dados & LGPD</a>
+    </aside>
+    <section>
+      <section id="perfil" class="panel">
+        <h2>Perfil</h2>
+        <div class="row-wrap" style="align-items:center;gap:14px">
+          <img id="avatarImg" class="avatar" alt="" />
+          <div id="avatarPh" class="avatar avatar-placeholder" style="display:none"></div>
+          <div>
+            <div id="welcome" class="pro-name"></div>
+            <div id="userRole" class="pro-sub"></div>
+            <div id="userRating" class="pro-sub"></div>
+          </div>
+        </div>
+        <form id="profileForm" class="form" style="margin-top:12px">
+          <label>Foto de perfil
+            <input id="photoInput" type="file" accept="image/*" />
+            <span class="hint">JPG/PNG/WebP, redimensionada para 512px.</span>
+          </label>
+          <div class="row">
+            <label>Nome
+              <input id="name" />
+            </label>
+            <label>Telefone
+              <input id="phone" />
+            </label>
+          </div>
+          <button class="btn btn-primary" type="submit">Salvar perfil</button>
+        </form>
+      </section>
+
+      <section id="profissional" class="panel" hidden>
+        <h2>Perfil profissional</h2>
+        <form id="proForm" class="form">
+          <label>Título (ex.: "Dentista clínica geral — 10 anos")
+            <input id="headline" placeholder="Como você se apresenta" />
+          </label>
+          <label>Sobre
+            <textarea id="bio" placeholder="Conte a sua experiência, especialidades, diferenciais"></textarea>
+          </label>
+          <label>Serviços que oferece
+            <div id="servicesGrid" class="row-wrap" style="margin-top:6px"></div>
+          </label>
+          <div class="row">
+            <label>Preço por hora (R$)
+              <input id="hourly" type="number" min="0" step="5" />
+            </label>
+            <label>Raio de atuação (km)
+              <input id="radiusKm" type="number" min="1" max="100" step="1" />
+            </label>
+          </div>
+          <label class="switch"><input type="checkbox" id="available" /> Disponível agora (receber chamadas urgentes)</label>
+          <div class="row">
+            <label>Cidade / bairro
+              <input id="city" placeholder="Ex.: São Paulo — Pinheiros" />
+            </label>
+            <label>Localização
+              <button id="btnLocate" type="button" class="btn">Usar minha localização</button>
+            </label>
+          </div>
+          <div id="locStatus" class="hint">—</div>
+
+          <h3>Verificação de documento</h3>
+          <div class="row">
+            <label>Tipo
+              <select id="docType">
+                <option value="rg">RG</option>
+                <option value="cnh">CNH</option>
+                <option value="passport">Passaporte</option>
+                <option value="conselho">Carteira de Conselho (CRM/CRO/CREF…)</option>
+              </select>
+            </label>
+            <label>Número
+              <input id="docNumber" placeholder="Número do documento" />
+            </label>
+          </div>
+          <label>Arquivo (frente)
+            <input id="docFile" type="file" accept="image/*,application/pdf" />
+            <span class="hint">Apenas um hash do arquivo é salvo nesta demo — o arquivo em si não é enviado para lugar nenhum.</span>
+          </label>
+          <div id="verifyStatus" class="chip">Não verificado</div>
+
+          <button class="btn btn-primary" type="submit">Salvar profissional</button>
+        </form>
+      </section>
+
+      <section id="pedidos" class="panel">
+        <h2>Pedidos</h2>
+        <div class="tabs" id="bookingTabs">
+          <button data-t="all" class="active">Todos</button>
+          <button data-t="requested">Solicitados</button>
+          <button data-t="accepted">Em andamento</button>
+          <button data-t="done">Concluídos</button>
+          <button data-t="cancelled">Cancelados</button>
+        </div>
+        <div id="bookings" class="list"></div>
+      </section>
+
+      <section id="avaliacoes" class="panel">
+        <h2>Avaliações recebidas</h2>
+        <div id="ratings" class="list"></div>
+      </section>
+
+      <section id="dados" class="panel">
+        <h2>Meus dados &amp; LGPD</h2>
+        <p class="muted">Você pode exportar todos os seus dados ou excluir sua conta a qualquer momento.</p>
+        <div class="row-wrap">
+          <button id="btnExport" class="btn">Exportar dados (JSON)</button>
+          <button id="btnDelete" class="btn btn-danger">Excluir minha conta</button>
+        </div>
+      </section>
+    </section>
+  </div>
+</main>
+
+<script type="module">
+import { requireAuth, SERVICE_CATEGORIES, logout } from './js/auth.js';
+import { db, findPro, avgRating } from './js/db.js';
+import { getCurrentLocation } from './js/geo.js';
+import { sha256 } from './js/crypto.js';
+import { $, $$, h, stars, initials, fmtMoney, fmtTime, toast, fileToDataURL } from './js/ui.js';
+
+const user = await requireAuth();
+
+function render(){
+  const u = db.get().users.find(x => x.id === user.id);
+  $('#welcome').textContent = 'Olá, ' + u.name.split(' ')[0] + '!';
+  const roleLabel = { client:'Cliente', pro:'Profissional', both:'Cliente + Profissional' }[u.role];
+  $('#userRole').textContent = roleLabel;
+  const { avg, count } = avgRating(u.id);
+  $('#userRating').innerHTML = count ? `<span class="chip star">${stars(avg)} ${avg} (${count})</span>` : '<span class="chip">Sem avaliações ainda</span>';
+  if (u.photo){ $('#avatarImg').src = u.photo; $('#avatarImg').style.display=''; $('#avatarPh').style.display='none'; }
+  else { $('#avatarImg').style.display='none'; $('#avatarPh').style.display=''; $('#avatarPh').textContent = initials(u.name); }
+  $('#name').value = u.name; $('#phone').value = u.phone;
+
+  const showPro = u.role === 'pro' || u.role === 'both';
+  $('#profissional').hidden = !showPro; $('#link-pro').style.display = showPro ? '' : 'none';
+  if (showPro) renderPro();
+  renderBookings();
+  renderRatings();
+}
+
+function renderPro(){
+  const pro = findPro(user.id); if (!pro) return;
+  $('#headline').value = pro.headline || '';
+  $('#bio').value = pro.bio || '';
+  $('#hourly').value = pro.hourly || 0;
+  $('#radiusKm').value = pro.radiusKm || 10;
+  $('#available').checked = !!pro.available;
+  $('#city').value = pro.location?.city || '';
+  $('#locStatus').textContent = pro.location ? `Lat ${pro.location.lat.toFixed(4)}, Lng ${pro.location.lng.toFixed(4)}` : 'Sem localização definida.';
+  if (pro.doc){
+    $('#docType').value = pro.doc.type; $('#docNumber').value = pro.doc.number || '';
+  }
+  $('#verifyStatus').className = 'chip ' + (pro.verified ? 'ok' : 'warn');
+  $('#verifyStatus').textContent = pro.verified ? 'Verificado' : 'Verificação pendente';
+
+  const sg = $('#servicesGrid'); sg.innerHTML='';
+  for (const c of SERVICE_CATEGORIES){
+    const id = 'svc_'+c.id;
+    const active = pro.services.includes(c.id);
+    const btn = h('button', {
+      type:'button', class:'chip', style: active ? 'border-color:var(--ring); color:#fff' : '',
+      onclick: () => { btn.dataset.on = btn.dataset.on === '1' ? '0' : '1'; btn.style.cssText = btn.dataset.on === '1' ? 'border-color:var(--ring); color:#fff' : ''; }
+    }, c.emoji+' '+c.label);
+    btn.dataset.on = active ? '1' : '0';
+    btn.dataset.cat = c.id;
+    sg.append(btn);
+  }
+}
+
+$('#photoInput').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const data = await fileToDataURL(f, 512);
+  db.save(d => { const u = d.users.find(x => x.id === user.id); u.photo = data; });
+  render(); toast('Foto atualizada.');
+});
+
+$('#profileForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  db.save(d => { const u = d.users.find(x => x.id === user.id); u.name = $('#name').value.trim(); u.phone = $('#phone').value.trim(); });
+  toast('Perfil salvo.'); render();
+});
+
+$('#btnLocate').addEventListener('click', async () => {
+  try{
+    const loc = await getCurrentLocation();
+    db.save(d => { const p = d.pros.find(x => x.userId === user.id); p.location = { ...loc, city: $('#city').value.trim() }; });
+    toast('Localização capturada.'); renderPro();
+  }catch(ex){ toast(ex.message, 'err'); }
+});
+
+$('#proForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const services = $$('#servicesGrid [data-cat]').filter(b => b.dataset.on === '1').map(b => b.dataset.cat);
+  let docHash = null;
+  const f = $('#docFile').files[0];
+  if (f){
+    const buf = await f.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    const tx = new TextDecoder('latin1').decode(bytes);
+    docHash = await sha256(tx + ':' + f.name + ':' + f.size);
+  }
+  db.save(d => {
+    const p = d.pros.find(x => x.userId === user.id);
+    p.headline = $('#headline').value.trim();
+    p.bio = $('#bio').value.trim();
+    p.services = services;
+    p.hourly = Number($('#hourly').value) || 0;
+    p.radiusKm = Math.max(1, Math.min(100, Number($('#radiusKm').value) || 10));
+    p.available = $('#available').checked;
+    if (p.location) p.location.city = $('#city').value.trim();
+    if (docHash){
+      p.doc = { type: $('#docType').value, number: $('#docNumber').value.trim(), fileName:f.name, fileDataHash: docHash };
+      p.verified = true; // demo: auto-verify on upload; real flow triggers manual review
+    }
+  });
+  toast('Perfil profissional salvo.'); renderPro();
+});
+
+// Bookings
+function renderBookings(tab='all'){
+  const d = db.get();
+  const mine = d.bookings.filter(b => b.clientId === user.id || b.proId === user.id);
+  const filtered = tab === 'all' ? mine : mine.filter(b => b.status === tab);
+  const box = $('#bookings'); box.innerHTML = '';
+  if (!filtered.length){ box.append(h('p', { class:'muted' }, 'Sem pedidos aqui.')); return; }
+  for (const b of filtered.sort((x,y)=>y.createdAt-x.createdAt)){
+    const other = d.users.find(u => u.id === (b.clientId === user.id ? b.proId : b.clientId));
+    const role = b.clientId === user.id ? 'Contratado' : 'Cliente';
+    const actions = [];
+    if (b.status === 'requested' && b.proId === user.id){
+      actions.push(h('button', { class:'btn btn-ok', onclick:()=>updateBooking(b.id,'accepted') }, 'Aceitar'));
+      actions.push(h('button', { class:'btn btn-danger', onclick:()=>updateBooking(b.id,'cancelled') }, 'Recusar'));
+    }
+    if (b.status === 'accepted'){
+      actions.push(h('button', { class:'btn btn-primary', onclick:()=>updateBooking(b.id,'done') }, 'Concluir'));
+      actions.push(h('button', { class:'btn', onclick:()=>updateBooking(b.id,'cancelled') }, 'Cancelar'));
+    }
+    if (b.status === 'done'){
+      actions.push(h('a', { class:'btn', href:`profile.html?id=${other?.id}#avaliar=${b.id}` }, 'Avaliar'));
+    }
+    const item = h('div', { class:'item' },
+      h('div', { class:'meta' },
+        h('div', {}, h('b', {}, role + ': ' + (other?.name || '—')), ' — ', SERVICE_CATEGORIES.find(s => s.id===b.serviceCat)?.label || b.serviceCat),
+        h('div', { class:'muted' }, fmtTime(b.createdAt) + ' • ' + fmtMoney(b.price) + (b.urgent ? ' • URGENTE' : '')),
+        h('div', {}, h('span', { class:'chip' }, 'Status: ' + b.status))
+      ),
+      h('div', { class:'actions' }, ...actions)
+    );
+    box.append(item);
+  }
+}
+function updateBooking(id, status){
+  db.save(d => { const b = d.bookings.find(x => x.id === id); if (b){ b.status = status; if (status==='done') b.doneAt = Date.now(); }});
+  toast('Pedido atualizado.'); renderBookings(currentTab);
+}
+let currentTab = 'all';
+$$('#bookingTabs button').forEach(b => b.addEventListener('click', () => {
+  $$('#bookingTabs button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); currentTab = b.dataset.t; renderBookings(currentTab);
+}));
+
+function renderRatings(){
+  const d = db.get();
+  const rs = d.ratings.filter(r => r.toId === user.id).sort((a,b)=>b.createdAt-a.createdAt);
+  const box = $('#ratings'); box.innerHTML = '';
+  if (!rs.length){ box.append(h('p', { class:'muted' }, 'Nenhuma avaliação ainda.')); return; }
+  for (const r of rs){
+    const from = d.users.find(u => u.id === r.fromId);
+    box.append(h('div', { class:'item' },
+      h('div', { class:'meta' },
+        h('div', {}, h('span', { class:'chip star' }, stars(r.stars)+' '+r.stars+'/5'), ' — ', h('b', {}, from?.name || 'Anônimo')),
+        h('div', { class:'muted' }, r.comment || '—'),
+        h('div', { class:'muted' }, fmtTime(r.createdAt))
+      )
+    ));
+  }
+}
+
+$('#btnExport').addEventListener('click', () => {
+  const blob = new Blob([db.export()], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'konektra-export.json'; a.click();
+  toast('Export pronto.');
+});
+$('#btnDelete').addEventListener('click', () => {
+  if (!confirm('Excluir sua conta e todos os dados associados neste dispositivo?')) return;
+  db.save(d => {
+    d.users = d.users.filter(u => u.id !== user.id);
+    d.pros = d.pros.filter(p => p.userId !== user.id);
+    d.bookings = d.bookings.filter(b => b.clientId !== user.id && b.proId !== user.id);
+    d.ratings = d.ratings.filter(r => r.fromId !== user.id && r.toId !== user.id);
+  });
+  logout(); location.href = 'index.html';
+});
+
+render();
+</script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
