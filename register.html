@@ -25,34 +25,39 @@
         <button type="button" data-role="both">Os dois</button>
       </div>
       <label>Nome completo
-        <input id="name" required placeholder="Ex.: Maria Silva" />
+        <input id="name" required placeholder="Ex.: Maria Silva" autocomplete="name" />
+        <span class="hint err" id="err-name" hidden></span>
       </label>
       <div class="row">
         <label>E-mail
-          <input id="email" type="email" required placeholder="voce@exemplo.com" />
+          <input id="email" type="email" required placeholder="voce@exemplo.com" autocomplete="email" inputmode="email" />
+          <span class="hint err" id="err-email" hidden></span>
         </label>
         <label>Telefone
-          <input id="phone" required placeholder="(11) 90000-0000" />
+          <input id="phone" required placeholder="(11) 90000-0000" autocomplete="tel" inputmode="tel" maxlength="16" />
+          <span class="hint err" id="err-phone" hidden></span>
         </label>
       </div>
       <label>CPF
-        <input id="cpf" required placeholder="000.000.000-00" />
+        <input id="cpf" required placeholder="000.000.000-00" inputmode="numeric" maxlength="14" />
         <span class="hint">Validamos o CPF matematicamente; o número é armazenado apenas no seu dispositivo nesta demo.</span>
+        <span class="hint err" id="err-cpf" hidden></span>
       </label>
       <label>Senha
-        <input id="password" type="password" required minlength="8" placeholder="Mínimo 8 caracteres, com números e símbolo" />
+        <input id="password" type="password" required minlength="8" placeholder="Mínimo 8 caracteres, com números e símbolo" autocomplete="new-password" />
         <span class="hint" id="pwHint">Força: —</span>
+        <span class="hint err" id="err-password" hidden></span>
       </label>
       <label class="switch"><input type="checkbox" id="terms" /> Li e aceito os <a href="docs/TERMS.html" target="_blank">Termos de Uso</a>.</label>
       <label class="switch"><input type="checkbox" id="privacy" /> Li e aceito a <a href="docs/PRIVACY.html" target="_blank">Política de Privacidade</a> (LGPD).</label>
-      <div id="formError" class="error" hidden></div>
+      <div id="formError" class="error" role="alert" aria-live="polite" hidden></div>
       <button class="btn btn-primary btn-lg btn-block" type="submit">Criar minha conta</button>
       <p class="hint">Já tem conta? <a href="login.html">Entrar</a></p>
     </form>
   </div>
 </main>
 <script type="module">
-import { register, passwordStrength, validateEmail, validateCPF } from './js/auth.js';
+import { register, passwordStrength, validateEmail, validateCPF, validatePhone } from './js/auth.js';
 import { $, $$, qs, toast } from './js/ui.js';
 
 let role = qs('role') || 'client';
@@ -68,11 +73,26 @@ function fmtCPF(v){
   const s = v.replace(/\D/g,'').slice(0,11);
   return s.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})\.(\d{3})(\d)/,'$1.$2.$3').replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/,'$1.$2.$3-$4');
 }
-$('#cpf').addEventListener('input', e => e.target.value = fmtCPF(e.target.value));
+$('#cpf').addEventListener('input', e => { e.target.value = fmtCPF(e.target.value); clearFieldErr('cpf'); });
 $('#phone').addEventListener('input', e => {
   const s = e.target.value.replace(/\D/g,'').slice(0,11);
-  e.target.value = s.replace(/(\d{2})(\d)/,'($1) $2').replace(/(\d{5})(\d)/,'$1-$2');
+  let out = s;
+  if (s.length > 10) out = s.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+  else if (s.length > 6) out = s.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  else if (s.length > 2) out = s.replace(/(\d{2})(\d{0,5})/, '($1) $2');
+  e.target.value = out.replace(/-$/, '');
+  clearFieldErr('phone');
 });
+['name','email','password'].forEach(id => $('#'+id).addEventListener('input', () => clearFieldErr(id)));
+
+function setFieldErr(id, msg){
+  const el = $('#err-'+id);
+  if (!el) return;
+  el.textContent = msg; el.hidden = !msg;
+  const input = $('#'+id);
+  if (input){ input.setAttribute('aria-invalid', msg ? 'true' : 'false'); input.classList.toggle('invalid', !!msg); }
+}
+function clearFieldErr(id){ setFieldErr(id, ''); }
 $('#password').addEventListener('input', e => {
   const s = passwordStrength(e.target.value);
   const labels = ['muito fraca','fraca','média','boa','forte','excelente'];
@@ -83,6 +103,7 @@ $('#password').addEventListener('input', e => {
 $('#regForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const err = $('#formError'); err.hidden = true;
+  ['name','email','phone','cpf','password'].forEach(clearFieldErr);
   const payload = {
     name: $('#name').value.trim(),
     email: $('#email').value.trim(),
@@ -93,15 +114,39 @@ $('#regForm').addEventListener('submit', async (e) => {
     termsAccepted: $('#terms').checked,
     privacyAccepted: $('#privacy').checked,
   };
+
+  // Field-level validation before the network-less register() so the user sees
+  // which specific field is wrong.
+  const checks = [
+    ['name', payload.name.length >= 2, 'Informe o nome completo.'],
+    ['email', validateEmail(payload.email), 'E-mail inválido.'],
+    ['phone', validatePhone(payload.phone), 'Use DDD + número. Ex.: (11) 90000-0000.'],
+    ['cpf', validateCPF(payload.cpf), 'CPF inválido — confira os dígitos.'],
+    ['password', passwordStrength(payload.password) >= 3, 'Senha fraca. Use 8+ caracteres com letras, números e símbolo.'],
+  ];
+  let firstBad = null;
+  for (const [id, ok, msg] of checks){
+    if (!ok){ setFieldErr(id, msg); if (!firstBad) firstBad = id; }
+  }
+  if (!payload.termsAccepted || !payload.privacyAccepted){
+    err.textContent = 'Aceite os Termos de Uso e a Política de Privacidade.'; err.hidden = false;
+    if (!firstBad) firstBad = 'terms';
+  }
+  if (firstBad){
+    const el = $('#'+firstBad);
+    if (el){ el.focus(); el.scrollIntoView({ behavior:'smooth', block:'center' }); }
+    return;
+  }
+
   try{
     await register(payload);
-    // auto-login
     const { login } = await import('./js/auth.js');
     await login(payload.email, payload.password);
     toast('Conta criada! Bem-vindo(a) à Konektra.', 'ok');
     setTimeout(() => location.href = 'dashboard.html', 400);
   }catch(ex){
     err.textContent = ex.message; err.hidden = false;
+    err.scrollIntoView({ behavior:'smooth', block:'center' });
   }
 });
 </script>

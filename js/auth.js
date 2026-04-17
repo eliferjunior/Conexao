@@ -33,6 +33,12 @@ export const SERVICE_CATEGORIES = [
 export function validateEmail(email){
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email||'');
 }
+export function validatePhone(phone){
+  // Accepts masked or unmasked Brazilian numbers (10 or 11 digits) and
+  // optional country code up to 13 digits total, e.g. "+55 (11) 90000-0000".
+  const s = (phone||'').replace(/\D/g, '');
+  return s.length >= 10 && s.length <= 13;
+}
 export function validateCPF(cpf){
   const s = (cpf||'').replace(/\D/g,'');
   if (s.length !== 11 || /^(\d)\1{10}$/.test(s)) return false;
@@ -60,7 +66,7 @@ export function passwordStrength(pw){
 export async function register({ name, email, phone, cpf, password, role, termsAccepted, privacyAccepted }){
   if (!name || name.trim().length < 2) throw new Error('Nome muito curto.');
   if (!validateEmail(email)) throw new Error('E-mail inválido.');
-  if (!/^\+?\d[\d\s()-]{7,}$/.test(phone||'')) throw new Error('Telefone inválido.');
+  if (!validatePhone(phone)) throw new Error('Telefone inválido. Informe DDD + número (ex.: (11) 90000-0000).');
   if (!validateCPF(cpf)) throw new Error('CPF inválido.');
   if (passwordStrength(password) < 3) throw new Error('Senha fraca. Use 8+ caracteres com letras, números e símbolo.');
   if (!['client','pro','both'].includes(role)) throw new Error('Tipo de conta inválido.');

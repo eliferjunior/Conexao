@@ -78,6 +78,25 @@ await t('validateEmail / validateCPF / passwordStrength', () => {
   assert.equal(auth.passwordStrength(''), 0);
 });
 
+await t('validatePhone accepts masked, unmasked, and +55', () => {
+  assert.ok(auth.validatePhone('(11) 90000-0000'));
+  assert.ok(auth.validatePhone('11900000000'));
+  assert.ok(auth.validatePhone('+55 (11) 98765-4321'));
+  assert.ok(auth.validatePhone('1134567890')); // 10-digit landline
+  assert.ok(!auth.validatePhone('1234'));
+  assert.ok(!auth.validatePhone(''));
+  assert.ok(!auth.validatePhone('abc'));
+});
+
+await t('register with masked phone succeeds', async () => {
+  localStorage.clear(); sessionStorage.clear();
+  const u = await auth.register({
+    name:'Erika Lima', email:'erika@x.co', phone:'(11) 98765-4321', cpf:'529.982.247-25',
+    password:'Forte@12345', role:'client', termsAccepted:true, privacyAccepted:true,
+  });
+  assert.ok(u.id);
+});
+
 await t('register → login → currentUser (client)', async () => {
   localStorage.clear(); sessionStorage.clear();
   const u = await auth.register({

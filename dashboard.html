@@ -143,7 +143,7 @@
 </main>
 
 <script type="module">
-import { requireAuth, SERVICE_CATEGORIES, logout } from './js/auth.js';
+import { requireAuth, SERVICE_CATEGORIES, logout, validatePhone } from './js/auth.js';
 import { db, findPro, avgRating, notify, favoritesFor, toggleFavorite } from './js/db.js';
 import { getCurrentLocation } from './js/geo.js';
 import { sha256 } from './js/crypto.js';
@@ -236,7 +236,11 @@ $('#photoInput').addEventListener('change', async (e) => {
 
 $('#profileForm').addEventListener('submit', (e) => {
   e.preventDefault();
-  db.save(d => { const u = d.users.find(x => x.id === user.id); u.name = $('#name').value.trim(); u.phone = $('#phone').value.trim(); });
+  const newName = $('#name').value.trim();
+  const newPhone = $('#phone').value.trim();
+  if (newName.length < 2){ toast('Informe o nome completo.', 'err'); $('#name').focus(); return; }
+  if (!validatePhone(newPhone)){ toast('Telefone inválido. Use DDD + número.', 'err'); $('#phone').focus(); return; }
+  db.save(d => { const u = d.users.find(x => x.id === user.id); u.name = newName; u.phone = newPhone; });
   toast('Perfil salvo.'); render();
 });
 
