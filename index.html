@@ -11,6 +11,16 @@
 <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body class="landing">
+<noscript><div style="padding:16px;background:#ff5c7a;color:#fff;text-align:center">Konektra precisa de JavaScript habilitado.</div></noscript>
+<script>
+  // Quem abrir por file:// vê um aviso claro em vez de tela em branco.
+  if (location.protocol === 'file:') {
+    document.write('<div style="padding:18px;background:#f72585;color:#fff;font:600 14px system-ui,-apple-system,Segoe UI,sans-serif;text-align:center;line-height:1.5">'
+      + 'Você abriu a Konektra via <code>file://</code>. O app usa ES modules, Web Crypto e Geolocation, que exigem HTTP.<br>'
+      + 'Rode <code>./start.sh</code> (Linux/Mac), <code>start.bat</code> (Windows) ou <code>npm start</code> e acesse <code>http://localhost:8080/</code>.'
+      + '</div>');
+  }
+</script>
 <header class="nav">
   <a href="index.html" class="brand" aria-label="Konektra">
     <img src="assets/logo.svg" alt="" width="36" height="36" />

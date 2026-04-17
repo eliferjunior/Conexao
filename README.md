@@ -14,25 +14,22 @@ Este repositório contém uma versão **vanilla HTML/CSS/JS** (sem dependências
 - Ser facilmente portado para um backend real (Node/Express + Postgres + Prisma, ou Next.js + Supabase).
 - Mostrar a experiência completa: cadastro, login, perfis, busca, chamadas urgentes, avaliações, assinatura, LGPD.
 
-## Como rodar
-
-1. Clone o repositório.
-2. Sirva os arquivos com qualquer servidor estático. Exemplos:
+## Como rodar (1 comando)
 
 ```bash
-# Python
-python3 -m http.server 8080
+# Linux / macOS
+./start.sh
 
-# Node
-npx http-server -p 8080
+# Windows
+start.bat
 
-# PHP
-php -S localhost:8080
+# ou, se já tiver Node
+npm start
 ```
 
-3. Acesse <http://localhost:8080/>.
+O atalho abre `http://localhost:8080/` automaticamente no seu navegador e usa Node, Python ou PHP — o que estiver instalado.
 
-> **Importante**: abrir `index.html` pelo `file://` não funcionará porque o app usa ES modules, Web Crypto e Geolocation — que exigem um contexto seguro (HTTP/HTTPS).
+> ⚠️ **Não abra `index.html` dando duplo clique** (`file://`): o app usa ES modules, Web Crypto e Geolocation, que só funcionam sobre HTTP. Se você tentar, verá um aviso rosa grande com as instruções.
 
 ## Estrutura
 
